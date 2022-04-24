@@ -51,8 +51,8 @@ type Note struct {
 
 //
 // Identity implements thing interface
-func (n Note) HashKey() string { return p.Author }
-func (n Note) SortKey() string { return p.ID }
+func (n Note) HashKey() string { return n.Author }
+func (n Note) SortKey() string { return n.ID }
 
 //
 // this data type is a normal Golang struct

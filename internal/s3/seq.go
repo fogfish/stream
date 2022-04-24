@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -18,9 +17,9 @@ func (c cursor) HashKey() string { return c.hashKey }
 func (c cursor) SortKey() string { return c.sortKey }
 
 // seq is an iterator over matched results
-type seq struct {
+type seq[T stream.Thing] struct {
 	ctx    context.Context
-	db     *s3fs
+	db     *s3fs[T]
 	q      *s3.ListObjectsV2Input
 	at     int
 	items  []*string
@@ -28,13 +27,13 @@ type seq struct {
 	err    error
 }
 
-func newSeq(
+func newSeq[T stream.Thing](
 	ctx context.Context,
-	db *s3fs,
+	db *s3fs[T],
 	q *s3.ListObjectsV2Input,
 	err error,
-) *seq {
-	return &seq{
+) *seq[T] {
+	return &seq[T]{
 		ctx:    ctx,
 		db:     db,
 		q:      q,
@@ -45,7 +44,7 @@ func newSeq(
 	}
 }
 
-func (seq *seq) maybeSeed() error {
+func (seq *seq[T]) maybeSeed() error {
 	if !seq.stream {
 		return stream.EOS{}
 	}
@@ -53,7 +52,7 @@ func (seq *seq) maybeSeed() error {
 	return seq.seed()
 }
 
-func (seq *seq) seed() error {
+func (seq *seq[T]) seed() error {
 	if seq.items != nil && seq.q.StartAfter == nil {
 		return stream.EOS{}
 	}
@@ -82,14 +81,9 @@ func (seq *seq) seed() error {
 }
 
 // FMap transforms sequence
-func (seq *seq) FMap(f func(stream.Thing, io.ReadCloser) error) error {
+func (seq *seq[T]) FMap(f func(*T, io.ReadCloser) error) error {
 	for seq.Tail() {
-		key, err := seq.Head()
-		if err != nil {
-			return err
-		}
-
-		val, err := seq.Body()
+		key, val, err := seq.Head()
 		if err != nil {
 			return err
 		}
@@ -102,38 +96,39 @@ func (seq *seq) FMap(f func(stream.Thing, io.ReadCloser) error) error {
 }
 
 // Head selects the first element of matched collection.
-func (seq *seq) Head() (stream.Thing, error) {
+func (seq *seq[T]) Head() (*T, io.ReadCloser, error) {
 	if seq.items == nil {
 		if err := seq.seed(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	key := strings.Split(*seq.items[seq.at], "/_/")
-	if len(key) == 1 {
-		return &cursor{hashKey: key[0]}, nil
-	}
-	return &cursor{hashKey: key[0], sortKey: key[1]}, nil
+	return seq.db.get(seq.ctx, *seq.items[seq.at])
+
+	// key := strings.Split(*seq.items[seq.at], "/_/")
+	// if len(key) == 1 {
+	// 	return &cursor{hashKey: key[0]}, nil
+	// }
+	// return &cursor{hashKey: key[0], sortKey: key[1]}, nil
 }
 
-// Body
-func (seq *seq) Body() (io.ReadCloser, error) {
-	if seq.items == nil {
-		if err := seq.seed(); err != nil {
-			return nil, err
-		}
-	}
+// // Body
+// func (seq *seq) Body() (io.ReadCloser, error) {
+// 	if seq.items == nil {
+// 		if err := seq.seed(); err != nil {
+// 			return nil, err
+// 		}
+// 	}
 
-	url, err := seq.db.url(seq.ctx, seq.items[seq.at], 20*time.Minute)
-	if err != nil {
-		return nil, err
-	}
+// 	url, err := seq.db.url(seq.ctx, seq.items[seq.at], 20*time.Minute)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return seq.db.get(seq.ctx, url)
-}
+// }
 
 // Tail selects the all elements except the first one
-func (seq *seq) Tail() bool {
+func (seq *seq[T]) Tail() bool {
 	seq.at++
 
 	switch {
@@ -151,7 +146,7 @@ func (seq *seq) Tail() bool {
 }
 
 // Cursor is the global position in the sequence
-func (seq *seq) Cursor() stream.Thing {
+func (seq *seq[T]) Cursor() stream.Thing {
 	if seq.q.StartAfter != nil {
 		seq := strings.Split(*seq.q.StartAfter, "/_/")
 		if len(seq) == 1 {
@@ -163,19 +158,19 @@ func (seq *seq) Cursor() stream.Thing {
 }
 
 // Error indicates if any error appears during I/O
-func (seq *seq) Error() error {
+func (seq *seq[T]) Error() error {
 	return seq.err
 }
 
 // Limit sequence to N elements
-func (seq *seq) Limit(n int64) stream.Seq {
+func (seq *seq[T]) Limit(n int64) stream.Seq[T] {
 	seq.q.MaxKeys = aws.Int64(n)
 	seq.stream = false
 	return seq
 }
 
 // Continue limited sequence from the cursor
-func (seq *seq) Continue(key stream.Thing) stream.Seq {
+func (seq *seq[T]) Continue(key stream.Thing) stream.Seq[T] {
 	prefix := key.HashKey()
 	suffix := key.SortKey()
 
@@ -190,6 +185,6 @@ func (seq *seq) Continue(key stream.Thing) stream.Seq {
 }
 
 // Reverse order of sequence
-func (seq *seq) Reverse() stream.Seq {
+func (seq *seq[T]) Reverse() stream.Seq[T] {
 	return seq
 }

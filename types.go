@@ -30,11 +30,9 @@ type Thing interface {
 
 SeqLazy is an interface to iterate through collection of objects at storage
 */
-type SeqLazy interface {
+type SeqLazy[T Thing] interface {
 	// Head lifts first element of sequence
-	Head() (Thing, error)
-	// Body lifts first element of sequence
-	Body() (io.ReadCloser, error)
+	Head() (*T, io.ReadCloser, error)
 	// Tail evaluates tail of sequence
 	Tail() bool
 	// Error returns error of stream evaluation
@@ -47,13 +45,13 @@ type SeqLazy interface {
 
 SeqConfig configures optional sequence behavior
 */
-type SeqConfig interface {
+type SeqConfig[T Thing] interface {
 	// Limit sequence size to N elements (pagination)
-	Limit(int64) Seq
+	Limit(int64) Seq[T]
 	// Continue limited sequence from the cursor
-	Continue(Thing) Seq
+	Continue(Thing) Seq[T]
 	// Reverse order of sequence
-	Reverse() Seq
+	Reverse() Seq[T]
 }
 
 /*
@@ -62,12 +60,12 @@ Seq is an interface to transform collection of objects
 
   db.Match(...).FMap(func(key Thing, val io.ReadCloser) error { ... })
 */
-type Seq interface {
-	SeqLazy
-	SeqConfig
+type Seq[T Thing] interface {
+	SeqLazy[T]
+	SeqConfig[T]
 
 	// Sequence transformer
-	FMap(func(Thing, io.ReadCloser) error) error
+	FMap(func(*T, io.ReadCloser) error) error
 }
 
 //-----------------------------------------------------------------------------
@@ -80,20 +78,20 @@ type Seq interface {
 
 StreamGetter defines read by key notation
 */
-type StreamGetter interface {
-	Has(context.Context, Thing) (bool, error)
-	URL(context.Context, Thing, time.Duration) (string, error)
-	Get(context.Context, Thing) (io.ReadCloser, error)
+type StreamGetter[T Thing] interface {
+	Has(context.Context, T) (bool, error)
+	URL(context.Context, T, time.Duration) (string, error)
+	Get(context.Context, T) (*T, io.ReadCloser, error)
 }
 
 /*
 
 StreamGetterNoContext defines read by key notation
 */
-type StreamGetterNoContext interface {
-	Has(Thing) (bool, error)
-	URL(Thing, time.Duration) (string, error)
-	Get(Thing) (io.ReadCloser, error)
+type StreamGetterNoContext[T Thing] interface {
+	Has(T) (bool, error)
+	URL(T, time.Duration) (string, error)
+	Get(T) (*T, io.ReadCloser, error)
 }
 
 //-----------------------------------------------------------------------------
@@ -106,16 +104,16 @@ type StreamGetterNoContext interface {
 
 StreamPattern defines simple pattern matching lookup I/O
 */
-type StreamPattern interface {
-	Match(context.Context, Thing) Seq
+type StreamPattern[T Thing] interface {
+	Match(context.Context, T) Seq[T]
 }
 
 /*
 
 StreamPatternNoContext defines simple pattern matching lookup I/O
 */
-type StreamPatternNoContext interface {
-	Match(Thing) Seq
+type StreamPatternNoContext[T Thing] interface {
+	Match(T) Seq[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -128,18 +126,18 @@ type StreamPatternNoContext interface {
 
 KeyValReader a generic key-value trait to read domain objects
 */
-type StreamReader interface {
-	StreamGetter
-	StreamPattern
+type StreamReader[T Thing] interface {
+	StreamGetter[T]
+	StreamPattern[T]
 }
 
 /*
 
 StreamReaderNoContext a generic key-value trait to read domain objects
 */
-type StreamReaderNoContext interface {
-	StreamGetterNoContext
-	StreamPatternNoContext
+type StreamReaderNoContext[T Thing] interface {
+	StreamGetterNoContext[T]
+	StreamPatternNoContext[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -152,18 +150,18 @@ type StreamReaderNoContext interface {
 
 StreamWriter defines a generic key-value writer
 */
-type StreamWriter interface {
-	Put(context.Context, Thing, io.ReadCloser) error
-	Remove(context.Context, Thing) error
+type StreamWriter[T Thing] interface {
+	Put(context.Context, T, io.ReadCloser) error
+	Remove(context.Context, T) error
 }
 
 /*
 
 StreamWriterNoContext defines a generic key-value writer
 */
-type StreamWriterNoContext interface {
-	Put(Thing, io.ReadCloser) error
-	Remove(Thing) error
+type StreamWriterNoContext[T Thing] interface {
+	Put(T, io.ReadCloser) error
+	Remove(T) error
 }
 
 //-----------------------------------------------------------------------------
@@ -176,18 +174,18 @@ type StreamWriterNoContext interface {
 
 Stream is a generic key-value trait to access domain objects.
 */
-type Stream interface {
-	StreamReader
-	StreamWriter
+type Stream[T Thing] interface {
+	StreamReader[T]
+	StreamWriter[T]
 }
 
 /*
 
 StreamNoContext is a generic key-value trait to access domain objects.
 */
-type StreamNoContext interface {
-	StreamReaderNoContext
-	StreamWriterNoContext
+type StreamNoContext[T Thing] interface {
+	StreamReaderNoContext[T]
+	StreamWriterNoContext[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -200,10 +198,10 @@ type StreamNoContext interface {
 
 NotFound is an error to handle unknown elements
 */
-type NotFound struct{ Thing }
+type NotFound struct{ HashKey, SortKey string }
 
 func (e NotFound) Error() string {
-	return fmt.Sprintf("Not Found (%s, %s) ", e.Thing.HashKey(), e.Thing.SortKey())
+	return fmt.Sprintf("Not Found (%s, %s) ", e.HashKey, e.SortKey)
 }
 
 /*

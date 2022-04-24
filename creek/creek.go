@@ -17,16 +17,16 @@ The connection URI controls the access parameters.
 Supported scheme:
   s3:///my-bucket
 */
-func New(
+func New[T stream.Thing](
 	uri string,
 	defSession ...*session.Session,
-) (stream.Stream, error) {
+) (stream.Stream[T], error) {
 	awsSession, err := maybeNewSession(defSession)
 	if err != nil {
 		return nil, err
 	}
 
-	creator, spec, err := factory(uri, defSession...)
+	creator, spec, err := factory[T](uri, defSession...)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +44,7 @@ interface and configuration at startup. Such as:
 
   var io = dynamo.Must(dynamo.New())
 */
-func Must(kv stream.Stream, err error) stream.Stream {
+func Must[T stream.Thing](kv stream.Stream[T], err error) stream.Stream[T] {
 	if err != nil {
 		panic(err)
 	}
@@ -55,19 +55,19 @@ func Must(kv stream.Stream, err error) stream.Stream {
 
 creator is a factory function
 */
-type creator func(
+type creator[T stream.Thing] func(
 	io *session.Session,
 	spec *stream.URL,
-) stream.Stream
+) stream.Stream[T]
 
 /*
 
 parses connector url
 */
-func factory(
+func factory[T stream.Thing](
 	uri string,
 	defSession ...*session.Session,
-) (creator, *stream.URL, error) {
+) (creator[T], *stream.URL, error) {
 	spec, err := url.Parse(uri)
 	if err != nil {
 		return nil, nil, err
@@ -79,7 +79,7 @@ func factory(
 	case len(spec.Path) < 2:
 		return nil, nil, fmt.Errorf("Invalid url, path to data storage is not defined: %s", uri)
 	case spec.Scheme == "s3":
-		return s3.New, (*stream.URL)(spec), nil
+		return s3.New[T], (*stream.URL)(spec), nil
 	default:
 		return nil, nil, fmt.Errorf("Unsupported schema: %s", uri)
 	}
