@@ -11,15 +11,17 @@ import (
 )
 
 type Note struct {
-	Author          string
-	ID              string
-	CacheControl    string    `json:"Cache-Control,omitempty"`
-	ContentEncoding string    `json:"Content-Encoding,omitempty"`
-	ContentLanguage string    `json:"Content-Language,omitempty"`
-	ContentType     string    `json:"Content-Type,omitempty"`
-	Expires         time.Time `json:"Expires,omitempty"`
-	Custom          string    `json:"custom,omitempty"`
-	Attribute       string    `json:"attribute,omitempty"`
+	// User-defined metadata
+	Author    string `metadata:"Author"`
+	ID        string `metadata:"Id"`
+	Custom    string `metadata:"Custom"`
+	Attribute string `metadata:"Attribute"`
+	// System metadata
+	CacheControl    string    `metadata:"Cache-Control"`
+	ContentEncoding string    `metadata:"Content-Encoding"`
+	ContentLanguage string    `metadata:"Content-Language"`
+	ContentType     string    `metadata:"Content-Type"`
+	Expires         time.Time `metadata:"Expires"`
 }
 
 func (n Note) HashKey() string { return n.Author }
@@ -49,8 +51,10 @@ func fixtureObject() *a3.GetObjectOutput {
 		ContentType:     aws.String("Content-Type"),
 		Expires:         aws.String("Fri, 22 Apr 2022 12:34:56 UTC"),
 		Metadata: map[string]*string{
-			"custom":    aws.String("Custom"),
-			"attribute": aws.String("Attribute"),
+			"Author":    aws.String("haskell"),
+			"Id":        aws.String("8980789222"),
+			"Custom":    aws.String("Custom"),
+			"Attribute": aws.String("Attribute"),
 		},
 	}
 }
@@ -65,8 +69,10 @@ func TestEncode(t *testing.T) {
 		If(*val.ContentLanguage).Equal("Content-Language").
 		If(*val.ContentType).Equal("Content-Type").
 		If(*val.Expires).Equal(fixtureTime).
-		If(*val.Metadata["custom"]).Equal("Custom").
-		If(*val.Metadata["attribute"]).Equal("Attribute")
+		If(*val.Metadata["Author"]).Equal("haskell").
+		If(*val.Metadata["Id"]).Equal("8980789222").
+		If(*val.Metadata["Custom"]).Equal("Custom").
+		If(*val.Metadata["Attribute"]).Equal("Attribute")
 }
 
 func TestDecode(t *testing.T) {
@@ -79,6 +85,8 @@ func TestDecode(t *testing.T) {
 		If(val.ContentLanguage).Equal("Content-Language").
 		If(val.ContentType).Equal("Content-Type").
 		If(val.Expires).Equal(fixtureTime).
+		If(val.Author).Equal("haskell").
+		If(val.ID).Equal("8980789222").
 		If(val.Custom).Equal("Custom").
 		If(val.Attribute).Equal("Attribute")
 }

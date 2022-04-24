@@ -26,7 +26,7 @@ func NewCodec[T stream.Thing]() Codec[T] {
 	hseq.FMap(
 		hseq.Generic[T](),
 		func(t hseq.Type[T]) error {
-			name := strings.Split(t.StructField.Tag.Get("json"), ",")[0]
+			name := strings.Split(t.StructField.Tag.Get("metadata"), ",")[0]
 			if name != "" {
 				if isSystemMetadata(name) {
 					codec.system[name] = t

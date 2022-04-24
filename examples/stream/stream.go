@@ -13,8 +13,8 @@ import (
 )
 
 type Note struct {
-	Author string `json:"Author"`
-	ID     string `json:"Id"`
+	Author string `metadata:"Author"`
+	ID     string `metadata:"Id"`
 }
 
 func (n Note) HashKey() string { return n.Author }
@@ -29,7 +29,7 @@ func main() {
 	exampleGet(db)
 	exampleURL(db)
 	exampleMatch(db)
-	// exampleRemove(db)
+	exampleRemove(db)
 }
 
 const n = 5

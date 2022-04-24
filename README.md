@@ -1,24 +1,26 @@
 # stream
 
-The library implements a simple key-value abstraction to store binary data at AWS storage services: AWS S3.
+The library implements a simple streaming abstraction to store binary data and associated metadata at AWS storage services: AWS S3.
 
 
 ## Inspiration
 
-The library encourages developers to use Golang `io.ReadCloser` to define manipulation with binary data, write correct, maintainable code.The library uses interfaces to abstract and expose domain objects as streams and their identity. The library uses [AWS Golang SDK](https://aws.amazon.com/sdk-for-go/) under the hood.
+The library encourages developers to use Golang `io.ReadCloser` to abstract binary data and struct to define metadata. The library uses generic programming style to implement actual storage I/O, while expose metadata object as `[T stream.Thing]` with implicit conversion back and forth between a concrete struct(s). The library uses [AWS Golang SDK](https://aws.amazon.com/sdk-for-go/) under the hood.
 
 Essentially, the library implement a following generic key-value trait to access domain objects. 
 
 ```go
-type Stream interface {
-  Put(Thing, io.ReadCloser) error
-  Get(Thing) (io.ReadCloser, error)
-  Remove(Thing) error
-  Match(Thing) Seq
+type Stream[T stream.Thing] interface {
+  Put(T, io.ReadCloser) error
+  Get(T) (*T, io.ReadCloser, error)
+  Remove(T) error
+  Match(T) Seq[T]
 }
 ```
 
 ## Getting started
+
+The library requires Go **1.18** or later due to usage of [generics](https://go.dev/blog/intro-generics).
 
 The latest version of the library is available at its `main` branch. All development, including new features and bug fixes, take place on the `main` branch using forking and pull requests as described in contribution guidelines. The stable version is available via Golang modules.
 
@@ -39,14 +41,16 @@ import (
 
 ### Data types definition
 
-Data types definition is an essential part of development with `stream` library. The library demands implementation of `Thing` interface from application as identity from each stream. Secondly, each key is unique "composite primary key". The library encourages definition of both partition and sort keys, which facilitates linked-data, hierarchical structures and cheap relations between data elements.
+Data types definition is an essential part of development with `stream` library. Golang structs declares metadata of your binary streams. Public fields are serialized into S3 metadata attributes, the field tag `metadata` controls marshal/unmarshal process. 
+
+The library demands from each structure implementation of `Thing` interface. This type acts as struct annotation -- Golang compiler raises an error at compile time if other data type is supplied for Stream I/O. Secondly, each structure defines unique "composite primary key". The library encourages definition of both partition and sort keys, which facilitates linked-data, hierarchical structures and cheap relations between data elements.
 
 ```go
 import "github.com/fogfish/stream"
 
 type Note struct {
-	Author string
-	ID     string
+	Author string `metadata:"Author"`
+	ID     string `metadata:"Id"`
 }
 
 //
@@ -82,7 +86,7 @@ import (
 //
 // Create client and bind it with the bucket
 // Use URI notation to specify the diver (s3://) and the bucket (/my-bucket) 
-db := creek.Must(creek.New("s3:///my-bucket"))
+db := creek.Must(creek.New[Note]("s3:///my-bucket"))
 
 //
 // Write the stream with Put
@@ -94,7 +98,7 @@ if err := db.Put(note, stream); err != nil {
 // Lookup the stream using Get. This function takes input structure as key
 // and return a new copy upon the completion. The only requirement - ID has to
 // be defined.
-stream, err := db.Get(
+note, stream, err := db.Get(
   Note{
     Author:  "haskell",
     ID:      "8980789222",
@@ -120,6 +124,26 @@ err := db.Remove(
 )
 
 if err != nil { /* ... */ }
+```
+
+### Working with streams metadata
+
+Please see the original AWS post about [Working with object metadata](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html). The library support both system and user-defined metadata. System define metadata is few well-known attributes: `Cache-Control`, `Content-Encoding`, `Content-Language`, `Content-Type` and `Expires`.
+
+```go
+type Note struct {
+  // User-defined metadata
+  Author    string `metadata:"Author"`
+  ID        string `metadata:"Id"`
+  Custom    string `metadata:"Custom"`
+  Attribute string `metadata:"Attribute"`
+  // System metadata
+  CacheControl    string    `metadata:"Cache-Control"`
+  ContentEncoding string    `metadata:"Content-Encoding"`
+  ContentLanguage string    `metadata:"Content-Language"`
+  ContentType     string    `metadata:"Content-Type"`
+  Expires         time.Time `metadata:"Expires"`
+}
 ```
 
 
