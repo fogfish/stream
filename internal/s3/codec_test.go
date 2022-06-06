@@ -60,7 +60,7 @@ func fixtureObject() *a3.GetObjectOutput {
 }
 
 func TestEncode(t *testing.T) {
-	codec := s3.NewCodec[Note]()
+	codec := s3.NewCodec[Note]("")
 	val := codec.Encode(fixtureNote())
 
 	it.Ok(t).
@@ -76,7 +76,7 @@ func TestEncode(t *testing.T) {
 }
 
 func TestDecode(t *testing.T) {
-	codec := s3.NewCodec[Note]()
+	codec := s3.NewCodec[Note]("")
 	val := codec.Decode(fixtureObject())
 
 	it.Ok(t).

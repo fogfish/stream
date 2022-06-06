@@ -13,7 +13,7 @@ jobs:
 
       - uses: actions/setup-go@v2
         with:
-          go-version: '1.18'
+          go-version: 1.18.1
 
       - uses: actions/checkout@v3
 
@@ -33,7 +33,7 @@ jobs:
       - name: golang
         uses: actions/setup-go@v2
         with:
-          go-version: '1.18'
+          go-version: 1.18.1
 
       - name: checkout
         uses: actions/checkout@v2
@@ -42,10 +42,10 @@ jobs:
         run: |
           go build ./...
     
-      # - name: go test
-      #   run: |
-      #     go test -coverpkg=./... -v -coverprofile=profile.cov $(go list ./... | grep -v /examples/)
+      - name: go test
+        run: |
+          go test -coverpkg=./... -v -coverprofile=profile.cov $(go list ./... | grep -v /examples/)
 
-      # - uses: shogo82148/actions-goveralls@v1
-      #   with:
-      #     path-to-profile: profile.cov
+      - uses: shogo82148/actions-goveralls@v1
+        with:
+          path-to-profile: profile.cov
