@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -30,11 +31,11 @@ func New[T stream.Thing](
 	db := &s3fs[T]{io: io, s3: s3.New(io)}
 
 	// config bucket name
-	seq := spec.Segments(2)
-	db.bucket = seq[0]
+	seq := spec.Segments()
+	db.bucket = &seq[0]
 
 	//
-	db.codec = NewCodec[T]()
+	db.codec = NewCodec[T](filepath.Join(seq[1:]...))
 
 	return db
 }

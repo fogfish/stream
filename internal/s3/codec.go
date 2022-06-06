@@ -13,12 +13,14 @@ import (
 )
 
 type Codec[T stream.Thing] struct {
+	rootPath string
 	system   map[string]hseq.Type[T]
 	metadata map[string]hseq.Type[T]
 }
 
-func NewCodec[T stream.Thing]() Codec[T] {
+func NewCodec[T stream.Thing](rootPath string) Codec[T] {
 	codec := Codec[T]{
+		rootPath: rootPath,
 		system:   make(map[string]hseq.Type[T]),
 		metadata: make(map[string]hseq.Type[T]),
 	}
@@ -67,7 +69,7 @@ func (codec Codec[T]) EncodeKey(key stream.Thing) string {
 		return hkey
 	}
 
-	return hkey + "/_/" + skey
+	return codec.rootPath + "/" + hkey + "/_/" + skey
 }
 
 func (codec Codec[T]) Encode(entity T) *s3manager.UploadInput {
