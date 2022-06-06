@@ -1,13 +1,13 @@
 "[#] doc":
- - doc/*
- - doc/**/*
- - examples/**/*
+ - 'doc/*'
+ - 'doc/**/*'
+ - 'examples/**/*'
 
 "[#] api":
- - *.go
- - creek/*
+ - '*.go'
+ - 'creek/*'
 
 "[#] s3":
- - internal/s3/*
- - internal/s3/**/*
+ - 'internal/s3/*'
+ - 'internal/s3/**/*'
 
