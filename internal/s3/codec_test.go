@@ -86,8 +86,8 @@ func TestDecode(t *testing.T) {
 		If(val.ContentLanguage).Equal("Content-Language").
 		If(val.ContentType).Equal("Content-Type").
 		If(val.Expires).Equal(fixtureTime).
-		If(val.Author).Equal("haskell").
-		If(val.ID).Equal("8980789222").
+		If(val.Author).Equal(curie.IRI("haskell")).
+		If(val.ID).Equal(curie.IRI("8980789222")).
 		If(val.Custom).Equal("Custom").
 		If(val.Attribute).Equal("Attribute")
 }
