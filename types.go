@@ -198,10 +198,10 @@ type StreamNoContext[T Thing] interface {
 
 NotFound is an error to handle unknown elements
 */
-type NotFound struct{ HashKey, SortKey string }
+type NotFound struct{ Key string }
 
 func (e NotFound) Error() string {
-	return fmt.Sprintf("Not Found (%s, %s) ", e.HashKey, e.SortKey)
+	return fmt.Sprintf("Not Found (%s) ", e.Key)
 }
 
 /*

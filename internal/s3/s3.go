@@ -4,31 +4,51 @@ import (
 	"context"
 	"io"
 	"path/filepath"
-	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/stream"
 )
 
+/*
+
+S3 declares AWS API used by the library
+*/
+type S3 interface {
+	HeadObject(context.Context, *s3.HeadObjectInput, ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+}
+
 // ds3 is a S3 client
 type s3fs[T stream.Thing] struct {
-	io     *session.Session
-	s3     s3iface.S3API
+	io     aws.Config
+	s3api  *s3.Client
+	s3sign *s3.PresignClient
+	upload *manager.Uploader
 	codec  Codec[T]
 	bucket *string
 }
 
 func New[T stream.Thing](
-	io *session.Session,
+	io aws.Config,
 	spec *stream.URL,
 ) stream.Stream[T] {
-	db := &s3fs[T]{io: io, s3: s3.New(io)}
+	s3api := s3.NewFromConfig(io)
+	s3sign := s3.NewPresignClient(s3api)
+	upload := manager.NewUploader(s3api)
+
+	db := &s3fs[T]{
+		io:     io,
+		s3api:  s3api,
+		s3sign: s3sign,
+		upload: upload,
+	}
 
 	// config bucket name
 	seq := spec.Segments()
@@ -38,11 +58,6 @@ func New[T stream.Thing](
 	db.codec = NewCodec[T](filepath.Join(seq[1:]...))
 
 	return db
-}
-
-// Mock S3 I/O channel
-func (db *s3fs[T]) Mock(s3 s3iface.S3API) {
-	db.s3 = s3
 }
 
 //-----------------------------------------------------------------------------
@@ -59,14 +74,11 @@ func (db *s3fs[T]) Has(
 		Bucket: db.bucket,
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
-	_, err := db.s3.HeadObjectWithContext(ctx, req)
+	_, err := db.s3api.HeadObject(ctx, req)
 	if err != nil {
-		switch v := err.(type) {
-		case awserr.Error:
-			if v.Code() == s3.ErrCodeNoSuchKey {
-				return false, nil
-			}
-			return false, err
+		switch err.(type) {
+		case *types.NoSuchKey:
+			return false, nil
 		default:
 			return false, err
 		}
@@ -82,9 +94,12 @@ func (db *s3fs[T]) URL(ctx context.Context, key T, expire time.Duration) (string
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
 
-	item, _ := db.s3.GetObjectRequest(req)
-	item.SetContext(ctx)
-	return item.Presign(expire)
+	val, err := db.s3sign.PresignGetObject(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	return val.URL, nil
 }
 
 // Get item from storage
@@ -97,18 +112,11 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (*T, io.ReadCloser, erro
 		Bucket: db.bucket,
 		Key:    aws.String(key),
 	}
-	val, err := db.s3.GetObjectWithContext(ctx, req)
+	val, err := db.s3api.GetObject(ctx, req)
 	if err != nil {
-		switch v := err.(type) {
-		case awserr.Error:
-			if v.Code() == s3.ErrCodeNoSuchKey {
-				seq := strings.Split(key, "/_/")
-				if len(seq) == 1 {
-					return nil, nil, stream.NotFound{HashKey: seq[0]}
-				}
-				return nil, nil, stream.NotFound{HashKey: seq[0], SortKey: seq[1]}
-			}
-			return nil, nil, err
+		switch err.(type) {
+		case *types.NoSuchKey:
+			return nil, nil, stream.NotFound{Key: key}
 		default:
 			return nil, nil, err
 		}
@@ -120,13 +128,11 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (*T, io.ReadCloser, erro
 
 // Put writes entity
 func (db *s3fs[T]) Put(ctx context.Context, entity T, val io.ReadCloser) error {
-	up := s3manager.NewUploader(db.io)
-
 	req := db.codec.Encode(entity)
 	req.Bucket = db.bucket
 	req.Body = val
 
-	_, err := up.UploadWithContext(ctx, req)
+	_, err := db.upload.Upload(ctx, req)
 	return err
 }
 
@@ -137,7 +143,7 @@ func (db *s3fs[T]) Remove(ctx context.Context, key T) error {
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
 
-	_, err := db.s3.DeleteObjectWithContext(ctx, req)
+	_, err := db.s3api.DeleteObject(ctx, req)
 
 	return err
 }
@@ -145,7 +151,7 @@ func (db *s3fs[T]) Remove(ctx context.Context, key T) error {
 func (db *s3fs[T]) Match(ctx context.Context, key T) stream.Seq[T] {
 	req := &s3.ListObjectsV2Input{
 		Bucket:  db.bucket,
-		MaxKeys: aws.Int64(1000),
+		MaxKeys: int32(1000),
 		Prefix:  aws.String(db.codec.EncodeKey(key)),
 	}
 

@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/stream"
 )
 
@@ -57,13 +57,13 @@ func (seq *seq[T]) seed() error {
 		return stream.EOS{}
 	}
 
-	val, err := seq.db.s3.ListObjectsV2WithContext(seq.ctx, seq.q)
+	val, err := seq.db.s3api.ListObjectsV2(seq.ctx, seq.q)
 	if err != nil {
 		seq.err = err
 		return err
 	}
 
-	if *val.KeyCount == 0 {
+	if val.KeyCount == 0 {
 		return stream.EOS{}
 	}
 
@@ -164,7 +164,7 @@ func (seq *seq[T]) Error() error {
 
 // Limit sequence to N elements
 func (seq *seq[T]) Limit(n int64) stream.Seq[T] {
-	seq.q.MaxKeys = aws.Int64(n)
+	seq.q.MaxKeys = int32(n)
 	seq.stream = false
 	return seq
 }

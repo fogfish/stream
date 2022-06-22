@@ -5,9 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/golem/pure/hseq"
 	"github.com/fogfish/stream"
 )
@@ -69,11 +68,11 @@ func (codec Codec[T]) EncodeKey(key stream.Thing) string {
 		return hkey
 	}
 
-	return codec.rootPath + "/" + hkey + "/_/" + skey
+	return hkey + "/_/" + skey
 }
 
-func (codec Codec[T]) Encode(entity T) *s3manager.UploadInput {
-	req := &s3manager.UploadInput{}
+func (codec Codec[T]) Encode(entity T) *s3.PutObjectInput {
+	req := &s3.PutObjectInput{}
 	val := reflect.ValueOf(entity)
 
 	codec.encodeCacheControl(val, req)
@@ -87,7 +86,7 @@ func (codec Codec[T]) Encode(entity T) *s3manager.UploadInput {
 	return req
 }
 
-func (codec Codec[T]) encodeCacheControl(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeCacheControl(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Cache-Control"]
 	if ok {
 		if val := entity.FieldByIndex(f.Index).String(); val != "" {
@@ -96,7 +95,7 @@ func (codec Codec[T]) encodeCacheControl(entity reflect.Value, req *s3manager.Up
 	}
 }
 
-func (codec Codec[T]) encodeContentEncoding(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeContentEncoding(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Encoding"]
 	if ok {
 		if val := entity.FieldByIndex(f.Index).String(); val != "" {
@@ -105,7 +104,7 @@ func (codec Codec[T]) encodeContentEncoding(entity reflect.Value, req *s3manager
 	}
 }
 
-func (codec Codec[T]) encodeContentLanguage(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeContentLanguage(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Language"]
 	if ok {
 		if val := entity.FieldByIndex(f.Index).String(); val != "" {
@@ -114,7 +113,7 @@ func (codec Codec[T]) encodeContentLanguage(entity reflect.Value, req *s3manager
 	}
 }
 
-func (codec Codec[T]) encodeContentType(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeContentType(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Type"]
 	if ok {
 		if val := entity.FieldByIndex(f.Index).String(); val != "" {
@@ -123,7 +122,7 @@ func (codec Codec[T]) encodeContentType(entity reflect.Value, req *s3manager.Upl
 	}
 }
 
-func (codec Codec[T]) encodeExpires(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeExpires(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Expires"]
 	if ok {
 		t := entity.FieldByIndex(f.Index).Interface().(time.Time)
@@ -131,12 +130,12 @@ func (codec Codec[T]) encodeExpires(entity reflect.Value, req *s3manager.UploadI
 	}
 }
 
-func (codec Codec[T]) encodeMetadata(entity reflect.Value, req *s3manager.UploadInput) {
+func (codec Codec[T]) encodeMetadata(entity reflect.Value, req *s3.PutObjectInput) {
 	if len(codec.metadata) > 0 {
-		req.Metadata = map[string]*string{}
+		req.Metadata = map[string]string{}
 		for k, f := range codec.metadata {
 			if val := entity.FieldByIndex(f.Index).String(); val != "" {
-				req.Metadata[k] = aws.String(val)
+				req.Metadata[k] = val
 			}
 		}
 	}
@@ -160,7 +159,7 @@ func (codec Codec[T]) decodeCacheControl(entity reflect.Value, obj *s3.GetObject
 	f, ok := codec.system["Cache-Control"]
 	if ok {
 		if obj.CacheControl != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.StringValue(obj.CacheControl))
+			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.CacheControl))
 		}
 	}
 }
@@ -169,7 +168,7 @@ func (codec Codec[T]) decodeContentEncoding(entity reflect.Value, obj *s3.GetObj
 	f, ok := codec.system["Content-Encoding"]
 	if ok {
 		if obj.ContentEncoding != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.StringValue(obj.ContentEncoding))
+			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentEncoding))
 		}
 	}
 }
@@ -178,7 +177,7 @@ func (codec Codec[T]) decodeContentLanguage(entity reflect.Value, obj *s3.GetObj
 	f, ok := codec.system["Content-Language"]
 	if ok {
 		if obj.ContentLanguage != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.StringValue(obj.ContentLanguage))
+			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentLanguage))
 		}
 	}
 }
@@ -187,7 +186,7 @@ func (codec Codec[T]) decodeContentType(entity reflect.Value, obj *s3.GetObjectO
 	f, ok := codec.system["Content-Type"]
 	if ok {
 		if obj.ContentType != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.StringValue(obj.ContentType))
+			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentType))
 		}
 	}
 }
@@ -196,10 +195,7 @@ func (codec Codec[T]) decodeExpires(entity reflect.Value, obj *s3.GetObjectOutpu
 	f, ok := codec.system["Expires"]
 	if ok {
 		if obj.Expires != nil {
-			t, err := time.Parse(time.RFC1123, *obj.Expires)
-			if err == nil {
-				entity.FieldByIndex(f.Index).Set(reflect.ValueOf(t))
-			}
+			entity.FieldByIndex(f.Index).Set(reflect.ValueOf(*obj.Expires))
 		}
 	}
 }
@@ -209,7 +205,7 @@ func (codec Codec[T]) decodeMetadata(entity reflect.Value, obj *s3.GetObjectOutp
 		for k, f := range codec.metadata {
 			val, exists := obj.Metadata[k]
 			if exists {
-				entity.FieldByIndex(f.Index).SetString(*val)
+				entity.FieldByIndex(f.Index).SetString(val)
 			}
 		}
 	}
