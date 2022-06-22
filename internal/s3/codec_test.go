@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	a3 "github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	a3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/it"
 	"github.com/fogfish/stream/internal/s3"
 )
@@ -49,12 +49,12 @@ func fixtureObject() *a3.GetObjectOutput {
 		ContentEncoding: aws.String("Content-Encoding"),
 		ContentLanguage: aws.String("Content-Language"),
 		ContentType:     aws.String("Content-Type"),
-		Expires:         aws.String("Fri, 22 Apr 2022 12:34:56 UTC"),
-		Metadata: map[string]*string{
-			"Author":    aws.String("haskell"),
-			"Id":        aws.String("8980789222"),
-			"Custom":    aws.String("Custom"),
-			"Attribute": aws.String("Attribute"),
+		Expires:         &fixtureTime,
+		Metadata: map[string]string{
+			"Author":    "haskell",
+			"Id":        "8980789222",
+			"Custom":    "Custom",
+			"Attribute": "Attribute",
 		},
 	}
 }
@@ -69,10 +69,10 @@ func TestEncode(t *testing.T) {
 		If(*val.ContentLanguage).Equal("Content-Language").
 		If(*val.ContentType).Equal("Content-Type").
 		If(*val.Expires).Equal(fixtureTime).
-		If(*val.Metadata["Author"]).Equal("haskell").
-		If(*val.Metadata["Id"]).Equal("8980789222").
-		If(*val.Metadata["Custom"]).Equal("Custom").
-		If(*val.Metadata["Attribute"]).Equal("Attribute")
+		If(val.Metadata["Author"]).Equal("haskell").
+		If(val.Metadata["Id"]).Equal("8980789222").
+		If(val.Metadata["Custom"]).Equal("Custom").
+		If(val.Metadata["Attribute"]).Equal("Attribute")
 }
 
 func TestDecode(t *testing.T) {

@@ -1,10 +1,12 @@
 package creek
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/s3"
 )
@@ -19,7 +21,7 @@ Supported scheme:
 */
 func New[T stream.Thing](
 	uri string,
-	defSession ...*session.Session,
+	defSession ...aws.Config,
 ) (stream.Stream[T], error) {
 	awsSession, err := maybeNewSession(defSession)
 	if err != nil {
@@ -56,7 +58,7 @@ func Must[T stream.Thing](kv stream.Stream[T], err error) stream.Stream[T] {
 creator is a factory function
 */
 type creator[T stream.Thing] func(
-	io *session.Session,
+	io aws.Config,
 	spec *stream.URL,
 ) stream.Stream[T]
 
@@ -66,7 +68,7 @@ parses connector url
 */
 func factory[T stream.Thing](
 	uri string,
-	defSession ...*session.Session,
+	defSession ...aws.Config,
 ) (creator[T], *stream.URL, error) {
 	spec, err := url.Parse(uri)
 	if err != nil {
@@ -89,17 +91,14 @@ func factory[T stream.Thing](
 
 creates default session with AWS API
 */
-func maybeNewSession(defSession []*session.Session) (*session.Session, error) {
+func maybeNewSession(defSession []aws.Config) (aws.Config, error) {
 	if len(defSession) != 0 {
 		return defSession[0], nil
 	}
 
-	awsSession, err := session.NewSessionWithOptions(session.Options{
-		SharedConfigState: session.SharedConfigEnable,
-	})
-
+	awsSession, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		return nil, err
+		return aws.Config{}, err
 	}
 
 	return awsSession, nil

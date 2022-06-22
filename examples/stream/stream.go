@@ -13,8 +13,8 @@ import (
 )
 
 type Note struct {
-	Author string `metadata:"Author"`
-	ID     string `metadata:"Id"`
+	Author string `metadata:"author"`
+	ID     string `metadata:"id"`
 }
 
 func (n Note) HashKey() string { return n.Author }
@@ -93,13 +93,16 @@ func exampleURL(db stream.Stream[Note]) {
 }
 
 func exampleMatch(db stream.Stream[Note]) {
-	db.Match(context.TODO(), Note{Author: fmt.Sprintf("person")}).
+	err := db.Match(context.TODO(), Note{Author: fmt.Sprintf("person")}).
 		FMap(func(key *Note, val io.ReadCloser) error {
 			defer val.Close()
 			b, _ := io.ReadAll(val)
 			fmt.Printf("=[ match ]=> %+v %s\n", key, b)
 			return nil
 		})
+	if err != nil {
+		fmt.Printf("=[ match ]=> %v\n", err)
+	}
 }
 
 func exampleRemove(db stream.Stream[Note]) {
