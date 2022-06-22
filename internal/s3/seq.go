@@ -3,18 +3,18 @@ package s3
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/curie"
 	"github.com/fogfish/stream"
 )
 
 //
 type cursor struct{ hashKey, sortKey string }
 
-func (c cursor) HashKey() string { return c.hashKey }
-func (c cursor) SortKey() string { return c.sortKey }
+func (c cursor) HashKey() curie.IRI { return curie.IRI(c.hashKey) }
+func (c cursor) SortKey() curie.IRI { return curie.IRI(c.sortKey) }
 
 // seq is an iterator over matched results
 type seq[T stream.Thing] struct {
@@ -77,11 +77,16 @@ func (seq *seq[T]) seed() error {
 	if len(items) > 0 && val.NextContinuationToken != nil {
 		seq.q.StartAfter = items[len(items)-1]
 	}
+
+	if val.NextContinuationToken == nil {
+		seq.q.StartAfter = nil
+	}
+
 	return nil
 }
 
 // FMap transforms sequence
-func (seq *seq[T]) FMap(f func(*T, io.ReadCloser) error) error {
+func (seq *seq[T]) FMap(f func(T, io.ReadCloser) error) error {
 	for seq.Tail() {
 		key, val, err := seq.Head()
 		if err != nil {
@@ -96,36 +101,15 @@ func (seq *seq[T]) FMap(f func(*T, io.ReadCloser) error) error {
 }
 
 // Head selects the first element of matched collection.
-func (seq *seq[T]) Head() (*T, io.ReadCloser, error) {
+func (seq *seq[T]) Head() (T, io.ReadCloser, error) {
 	if seq.items == nil {
 		if err := seq.seed(); err != nil {
-			return nil, nil, err
+			return seq.db.undefined, nil, err
 		}
 	}
 
 	return seq.db.get(seq.ctx, *seq.items[seq.at])
-
-	// key := strings.Split(*seq.items[seq.at], "/_/")
-	// if len(key) == 1 {
-	// 	return &cursor{hashKey: key[0]}, nil
-	// }
-	// return &cursor{hashKey: key[0], sortKey: key[1]}, nil
 }
-
-// // Body
-// func (seq *seq) Body() (io.ReadCloser, error) {
-// 	if seq.items == nil {
-// 		if err := seq.seed(); err != nil {
-// 			return nil, err
-// 		}
-// 	}
-
-// 	url, err := seq.db.url(seq.ctx, seq.items[seq.at], 20*time.Minute)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// }
 
 // Tail selects the all elements except the first one
 func (seq *seq[T]) Tail() bool {
@@ -148,11 +132,7 @@ func (seq *seq[T]) Tail() bool {
 // Cursor is the global position in the sequence
 func (seq *seq[T]) Cursor() stream.Thing {
 	if seq.q.StartAfter != nil {
-		seq := strings.Split(*seq.q.StartAfter, "/_/")
-		if len(seq) == 1 {
-			return &cursor{hashKey: seq[0]}
-		}
-		return &cursor{hashKey: seq[0], sortKey: seq[1]}
+		return &cursor{hashKey: *seq.q.StartAfter}
 	}
 	return &cursor{}
 }
@@ -171,16 +151,13 @@ func (seq *seq[T]) Limit(n int64) stream.Seq[T] {
 
 // Continue limited sequence from the cursor
 func (seq *seq[T]) Continue(key stream.Thing) stream.Seq[T] {
+	// Note: s3 cursor supports only HashKey
 	prefix := key.HashKey()
-	suffix := key.SortKey()
 
 	if prefix != "" {
-		if suffix == "" {
-			seq.q.StartAfter = aws.String(prefix)
-		} else {
-			seq.q.StartAfter = aws.String(prefix + "/_/" + suffix)
-		}
+		seq.q.StartAfter = aws.String(string(prefix))
 	}
+
 	return seq
 }
 

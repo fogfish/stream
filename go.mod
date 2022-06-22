@@ -26,5 +26,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sso v1.11.9 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.16.7 // indirect
 	github.com/aws/smithy-go v1.11.3 // indirect
+	github.com/fogfish/curie v1.7.1 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 )

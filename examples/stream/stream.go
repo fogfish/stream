@@ -8,22 +8,35 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fogfish/curie"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/creek"
 )
 
 type Note struct {
-	Author string `metadata:"author"`
-	ID     string `metadata:"id"`
+	Author curie.IRI `metadata:"author"`
+	ID     curie.IRI `metadata:"id"`
 }
 
-func (n Note) HashKey() string { return n.Author }
-func (n Note) SortKey() string { return n.ID }
+func (n Note) HashKey() curie.IRI { return n.Author }
+func (n Note) SortKey() curie.IRI { return n.ID }
+
+type Stream stream.Stream[*Note]
 
 //
 //
 func main() {
-	db := creek.Must(creek.New[Note](os.Args[1]))
+	db := creek.Must(
+		creek.New[*Note](
+			stream.WithURI(os.Args[1]),
+			stream.WithPrefixes(
+				curie.Namespaces{
+					"person": "t/person/",
+					"note":   "note/",
+				},
+			),
+		),
+	)
 
 	examplePut(db)
 	exampleGet(db)
@@ -34,31 +47,31 @@ func main() {
 
 const n = 5
 
-func examplePut(db stream.Stream[Note]) {
+func examplePut(db Stream) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: fmt.Sprintf("person:%d", i),
-			ID:     fmt.Sprintf("note:%d", i),
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("note:%d", i),
 		}
 		val := io.NopCloser(
 			strings.NewReader(
 				fmt.Sprintf("This is example note %d.", i),
 			),
 		)
-		err := db.Put(context.TODO(), key, val)
+		err := db.Put(context.TODO(), &key, val)
 
 		fmt.Println("=[ put ]=> ", err)
 	}
 }
 
-func exampleGet(db stream.Stream[Note]) {
+func exampleGet(db Stream) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: fmt.Sprintf("person:%d", i),
-			ID:     fmt.Sprintf("note:%d", i),
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("note:%d", i),
 		}
 
-		val, sio, err := db.Get(context.TODO(), key)
+		val, sio, err := db.Get(context.TODO(), &key)
 		defer sio.Close()
 
 		switch v := err.(type) {
@@ -73,14 +86,14 @@ func exampleGet(db stream.Stream[Note]) {
 	}
 }
 
-func exampleURL(db stream.Stream[Note]) {
+func exampleURL(db Stream) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: fmt.Sprintf("person:%d", i),
-			ID:     fmt.Sprintf("note:%d", i),
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("note:%d", i),
 		}
 
-		val, err := db.URL(context.TODO(), key, 20*time.Minute)
+		val, err := db.URL(context.TODO(), &key, 20*time.Minute)
 		switch v := err.(type) {
 		case nil:
 			fmt.Printf("=[ url ]=> %s\n", val)
@@ -92,8 +105,9 @@ func exampleURL(db stream.Stream[Note]) {
 	}
 }
 
-func exampleMatch(db stream.Stream[Note]) {
-	err := db.Match(context.TODO(), Note{Author: fmt.Sprintf("person")}).
+func exampleMatch(db Stream) {
+	key := Note{Author: curie.New("person:")}
+	err := db.Match(context.TODO(), &key).
 		FMap(func(key *Note, val io.ReadCloser) error {
 			defer val.Close()
 			b, _ := io.ReadAll(val)
@@ -105,13 +119,13 @@ func exampleMatch(db stream.Stream[Note]) {
 	}
 }
 
-func exampleRemove(db stream.Stream[Note]) {
+func exampleRemove(db Stream) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: fmt.Sprintf("person:%d", i),
-			ID:     fmt.Sprintf("note:%d", i),
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("note:%d", i),
 		}
-		err := db.Remove(context.TODO(), key)
+		err := db.Remove(context.TODO(), &key)
 
 		fmt.Println("=[ remove ]=> ", err)
 	}

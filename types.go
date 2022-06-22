@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"time"
+
+	"github.com/fogfish/curie"
 )
 
 /*
@@ -16,8 +18,8 @@ The interfaces declares anything that have a unique identifier.
 The unique identity is exposed by pair of string: HashKey and SortKey.
 */
 type Thing interface {
-	HashKey() string
-	SortKey() string
+	HashKey() curie.IRI
+	SortKey() curie.IRI
 }
 
 //-----------------------------------------------------------------------------
@@ -32,7 +34,7 @@ SeqLazy is an interface to iterate through collection of objects at storage
 */
 type SeqLazy[T Thing] interface {
 	// Head lifts first element of sequence
-	Head() (*T, io.ReadCloser, error)
+	Head() (T, io.ReadCloser, error)
 	// Tail evaluates tail of sequence
 	Tail() bool
 	// Error returns error of stream evaluation
@@ -65,7 +67,7 @@ type Seq[T Thing] interface {
 	SeqConfig[T]
 
 	// Sequence transformer
-	FMap(func(*T, io.ReadCloser) error) error
+	FMap(func(T, io.ReadCloser) error) error
 }
 
 //-----------------------------------------------------------------------------
@@ -81,7 +83,7 @@ StreamGetter defines read by key notation
 type StreamGetter[T Thing] interface {
 	Has(context.Context, T) (bool, error)
 	URL(context.Context, T, time.Duration) (string, error)
-	Get(context.Context, T) (*T, io.ReadCloser, error)
+	Get(context.Context, T) (T, io.ReadCloser, error)
 }
 
 /*
@@ -91,7 +93,7 @@ StreamGetterNoContext defines read by key notation
 type StreamGetterNoContext[T Thing] interface {
 	Has(T) (bool, error)
 	URL(T, time.Duration) (string, error)
-	Get(T) (*T, io.ReadCloser, error)
+	Get(T) (T, io.ReadCloser, error)
 }
 
 //-----------------------------------------------------------------------------

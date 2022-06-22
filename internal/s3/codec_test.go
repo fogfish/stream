@@ -6,16 +6,17 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	a3 "github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/curie"
 	"github.com/fogfish/it"
 	"github.com/fogfish/stream/internal/s3"
 )
 
 type Note struct {
 	// User-defined metadata
-	Author    string `metadata:"Author"`
-	ID        string `metadata:"Id"`
-	Custom    string `metadata:"Custom"`
-	Attribute string `metadata:"Attribute"`
+	Author    curie.IRI `metadata:"Author"`
+	ID        curie.IRI `metadata:"Id"`
+	Custom    string    `metadata:"Custom"`
+	Attribute string    `metadata:"Attribute"`
 	// System metadata
 	CacheControl    string    `metadata:"Cache-Control"`
 	ContentEncoding string    `metadata:"Content-Encoding"`
@@ -24,8 +25,8 @@ type Note struct {
 	Expires         time.Time `metadata:"Expires"`
 }
 
-func (n Note) HashKey() string { return n.Author }
-func (n Note) SortKey() string { return n.ID }
+func (n Note) HashKey() curie.IRI { return n.Author }
+func (n Note) SortKey() curie.IRI { return n.ID }
 
 var fixtureTime, _ = time.Parse(time.RFC1123, "Fri, 22 Apr 2022 12:34:56 UTC")
 
@@ -60,7 +61,7 @@ func fixtureObject() *a3.GetObjectOutput {
 }
 
 func TestEncode(t *testing.T) {
-	codec := s3.NewCodec[Note]("")
+	codec := s3.NewCodec[Note](curie.Namespaces{})
 	val := codec.Encode(fixtureNote())
 
 	it.Ok(t).
@@ -76,7 +77,7 @@ func TestEncode(t *testing.T) {
 }
 
 func TestDecode(t *testing.T) {
-	codec := s3.NewCodec[Note]("")
+	codec := s3.NewCodec[Note](curie.Namespaces{})
 	val := codec.Decode(fixtureObject())
 
 	it.Ok(t).
@@ -85,8 +86,8 @@ func TestDecode(t *testing.T) {
 		If(val.ContentLanguage).Equal("Content-Language").
 		If(val.ContentType).Equal("Content-Type").
 		If(val.Expires).Equal(fixtureTime).
-		If(val.Author).Equal("haskell").
-		If(val.ID).Equal("8980789222").
+		If(val.Author).Equal(curie.IRI("haskell")).
+		If(val.ID).Equal(curie.IRI("8980789222")).
 		If(val.Custom).Equal("Custom").
 		If(val.Attribute).Equal("Attribute")
 }
