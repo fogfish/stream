@@ -29,7 +29,7 @@ func main() {
 	exampleGet(db)
 	exampleURL(db)
 	exampleMatch(db)
-	// exampleRemove(db)
+	exampleRemove(db)
 }
 
 const n = 5
