@@ -3,7 +3,6 @@ package s3
 import (
 	"context"
 	"io"
-	"path/filepath"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -13,49 +12,33 @@ import (
 	"github.com/fogfish/stream"
 )
 
-/*
-
-S3 declares AWS API used by the library
-*/
-type S3 interface {
-	HeadObject(context.Context, *s3.HeadObjectInput, ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
-	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
-	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
-	DeleteObject(context.Context, *s3.DeleteObjectInput, ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
-	ListObjectsV2(context.Context, *s3.ListObjectsV2Input, ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
-}
-
 // ds3 is a S3 client
 type s3fs[T stream.Thing] struct {
-	io     aws.Config
-	s3api  *s3.Client
-	s3sign *s3.PresignClient
-	upload *manager.Uploader
-	codec  Codec[T]
-	bucket *string
+	s3api     *s3.Client
+	s3sign    *s3.PresignClient
+	upload    *manager.Uploader
+	codec     Codec[T]
+	bucket    *string
+	undefined T
 }
 
-func New[T stream.Thing](
-	io aws.Config,
-	spec *stream.URL,
-) stream.Stream[T] {
-	s3api := s3.NewFromConfig(io)
+func New[T stream.Thing](cfg *stream.Config) stream.Stream[T] {
+	s3api := s3.NewFromConfig(cfg.AWS)
 	s3sign := s3.NewPresignClient(s3api)
 	upload := manager.NewUploader(s3api)
 
 	db := &s3fs[T]{
-		io:     io,
 		s3api:  s3api,
 		s3sign: s3sign,
 		upload: upload,
 	}
 
 	// config bucket name
-	seq := spec.Segments()
+	seq := cfg.URI.Segments()
 	db.bucket = &seq[0]
 
 	//
-	db.codec = NewCodec[T](filepath.Join(seq[1:]...))
+	db.codec = NewCodec[T](cfg.Prefixes)
 
 	return db
 }
@@ -103,11 +86,11 @@ func (db *s3fs[T]) URL(ctx context.Context, key T, expire time.Duration) (string
 }
 
 // Get item from storage
-func (db *s3fs[T]) Get(ctx context.Context, key T) (*T, io.ReadCloser, error) {
+func (db *s3fs[T]) Get(ctx context.Context, key T) (T, io.ReadCloser, error) {
 	return db.get(ctx, db.codec.EncodeKey(key))
 }
 
-func (db *s3fs[T]) get(ctx context.Context, key string) (*T, io.ReadCloser, error) {
+func (db *s3fs[T]) get(ctx context.Context, key string) (T, io.ReadCloser, error) {
 	req := &s3.GetObjectInput{
 		Bucket: db.bucket,
 		Key:    aws.String(key),
@@ -116,9 +99,9 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (*T, io.ReadCloser, erro
 	if err != nil {
 		switch err.(type) {
 		case *types.NoSuchKey:
-			return nil, nil, stream.NotFound{Key: key}
+			return db.undefined, nil, stream.NotFound{Key: key}
 		default:
-			return nil, nil, err
+			return db.undefined, nil, err
 		}
 	}
 

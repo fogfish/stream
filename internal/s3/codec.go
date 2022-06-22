@@ -7,21 +7,22 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/curie"
 	"github.com/fogfish/golem/pure/hseq"
 	"github.com/fogfish/stream"
 )
 
 type Codec[T stream.Thing] struct {
-	rootPath string
 	system   map[string]hseq.Type[T]
 	metadata map[string]hseq.Type[T]
+	prefixes curie.Prefixes
 }
 
-func NewCodec[T stream.Thing](rootPath string) Codec[T] {
+func NewCodec[T stream.Thing](prefixes curie.Prefixes) Codec[T] {
 	codec := Codec[T]{
-		rootPath: rootPath,
 		system:   make(map[string]hseq.Type[T]),
 		metadata: make(map[string]hseq.Type[T]),
+		prefixes: prefixes,
 	}
 
 	hseq.FMap(
@@ -61,19 +62,22 @@ func isSystemMetadata(id string) bool {
 
 //
 func (codec Codec[T]) EncodeKey(key stream.Thing) string {
-	hkey := key.HashKey()
-	skey := key.SortKey()
+	hkey := curie.URI(codec.prefixes, key.HashKey())
+	skey := curie.URI(codec.prefixes, key.SortKey())
 
 	if skey == "" {
 		return hkey
 	}
 
-	return hkey + "/_/" + skey
+	return hkey + "/" + skey
 }
 
 func (codec Codec[T]) Encode(entity T) *s3.PutObjectInput {
 	req := &s3.PutObjectInput{}
 	val := reflect.ValueOf(entity)
+	if val.Kind() == reflect.Pointer {
+		val = val.Elem()
+	}
 
 	codec.encodeCacheControl(val, req)
 	codec.encodeContentEncoding(val, req)
@@ -141,9 +145,20 @@ func (codec Codec[T]) encodeMetadata(entity reflect.Value, req *s3.PutObjectInpu
 	}
 }
 
-func (codec Codec[T]) Decode(obj *s3.GetObjectOutput) *T {
-	val := new(T)
-	gen := reflect.ValueOf(val).Elem()
+func (codec Codec[T]) Decode(obj *s3.GetObjectOutput) T {
+	var val T
+
+	// pointer to c makes reflect.ValueOf settable
+	// see The third law of reflection
+	// https://go.dev/blog/laws-of-reflection
+	gen := reflect.ValueOf(&val).Elem()
+	if gen.Kind() == reflect.Pointer {
+		// T is a pointer type, therefore c is nil
+		// it has to be filled with empty value before merging
+		empty := reflect.New(gen.Type().Elem())
+		gen.Set(empty)
+		gen = gen.Elem()
+	}
 
 	codec.decodeCacheControl(gen, obj)
 	codec.decodeContentEncoding(gen, obj)
