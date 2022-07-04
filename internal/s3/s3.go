@@ -2,6 +2,8 @@ package s3
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -59,12 +61,12 @@ func (db *s3fs[T]) Has(
 	}
 	_, err := db.s3api.HeadObject(ctx, req)
 	if err != nil {
-		switch err.(type) {
-		case *types.NoSuchKey:
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
 			return false, nil
-		default:
-			return false, err
 		}
+
+		return false, errServiceIO(err, "Has")
 	}
 
 	return true, nil
@@ -79,7 +81,7 @@ func (db *s3fs[T]) URL(ctx context.Context, key T, expire time.Duration) (string
 
 	val, err := db.s3sign.PresignGetObject(ctx, req)
 	if err != nil {
-		return "", err
+		return "", errServiceIO(err, "URL")
 	}
 
 	return val.URL, nil
@@ -97,16 +99,16 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (T, io.ReadCloser, error
 	}
 	val, err := db.s3api.GetObject(ctx, req)
 	if err != nil {
-		switch err.(type) {
-		case *types.NoSuchKey:
-			return db.undefined, nil, stream.NotFound{Key: key}
-		default:
-			return db.undefined, nil, err
+		var nsk *types.NoSuchKey
+		if errors.As(err, &nsk) {
+			return db.undefined, nil, stream.ErrNotFound(nil, key)
 		}
+
+		return db.undefined, nil, errServiceIO(err, "Get")
 	}
 
 	obj := db.codec.Decode(val)
-	return obj, val.Body, err
+	return obj, val.Body, nil
 }
 
 // Put writes entity
@@ -116,7 +118,7 @@ func (db *s3fs[T]) Put(ctx context.Context, entity T, val io.ReadCloser) error {
 	req.Body = val
 
 	_, err := db.upload.Upload(ctx, req)
-	return err
+	return errServiceIO(err, "Put")
 }
 
 // Remove discards the entity from the table
@@ -128,7 +130,7 @@ func (db *s3fs[T]) Remove(ctx context.Context, key T) error {
 
 	_, err := db.s3api.DeleteObject(ctx, req)
 
-	return err
+	return errServiceIO(err, "Remove")
 }
 
 func (db *s3fs[T]) Match(ctx context.Context, key T) stream.Seq[T] {
@@ -139,4 +141,20 @@ func (db *s3fs[T]) Match(ctx context.Context, key T) stream.Seq[T] {
 	}
 
 	return newSeq(ctx, db, req, nil)
+}
+
+//
+// Error types
+//
+
+func errServiceIO(err error, op string) error {
+	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", op, err)
+}
+
+func errInvalidEntity(err error, op string) error {
+	return fmt.Errorf("[stream.s3.%s] invalid entity: %w", op, err)
+}
+
+func errProcessEntity(err error, op string, thing stream.Thing) error {
+	return fmt.Errorf("[stream.s3.%s] can't process (%s, %s) : %w", op, thing.HashKey(), thing.SortKey(), err)
 }

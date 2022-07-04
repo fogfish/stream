@@ -74,14 +74,14 @@ func exampleGet(db Stream) {
 		val, sio, err := db.Get(context.TODO(), &key)
 		defer sio.Close()
 
-		switch v := err.(type) {
-		case nil:
+		switch {
+		case err == nil:
 			b, _ := io.ReadAll(sio)
 			fmt.Printf("=[ get ]=> %+v %s\n", val, b)
-		case stream.NotFound:
+		case recoverNotFound(err):
 			fmt.Printf("=[ get ]=> Not found: (%v, %v)\n", key.Author, key.ID)
 		default:
-			fmt.Printf("=[ get ]=> Fail: %v\n", v)
+			fmt.Printf("=[ get ]=> Fail: %v\n", err)
 		}
 	}
 }
@@ -94,13 +94,13 @@ func exampleURL(db Stream) {
 		}
 
 		val, err := db.URL(context.TODO(), &key, 20*time.Minute)
-		switch v := err.(type) {
-		case nil:
+		switch {
+		case err == nil:
 			fmt.Printf("=[ url ]=> %s\n", val)
-		case stream.NotFound:
+		case recoverNotFound(err):
 			fmt.Printf("=[ url ]=> Not found: (%v, %v)\n", key.Author, key.ID)
 		default:
-			fmt.Printf("=[ url ]=> Fail: %v\n", v)
+			fmt.Printf("=[ url ]=> Fail: %v\n", err)
 		}
 	}
 }
@@ -129,4 +129,11 @@ func exampleRemove(db Stream) {
 
 		fmt.Println("=[ remove ]=> ", err)
 	}
+}
+
+func recoverNotFound(err error) bool {
+	type notfound interface{ NotFound() bool }
+
+	terr, ok := err.(notfound)
+	return ok && terr.NotFound()
 }
