@@ -223,5 +223,5 @@ func (e *NotFound) NotFound() bool { return true }
 EOS error indicates End Of Stream
 */
 func ErrEndOfStream() error {
-	return errors.New("End Of Stream")
+	return errors.New("end of stream")
 }

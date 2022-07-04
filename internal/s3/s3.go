@@ -151,10 +151,6 @@ func errServiceIO(err error, op string) error {
 	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", op, err)
 }
 
-func errInvalidEntity(err error, op string) error {
-	return fmt.Errorf("[stream.s3.%s] invalid entity: %w", op, err)
-}
-
 func errProcessEntity(err error, op string, thing stream.Thing) error {
 	return fmt.Errorf("[stream.s3.%s] can't process (%s, %s) : %w", op, thing.HashKey(), thing.SortKey(), err)
 }
