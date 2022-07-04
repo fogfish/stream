@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -46,7 +47,7 @@ func newSeq[T stream.Thing](
 
 func (seq *seq[T]) maybeSeed() error {
 	if !seq.stream {
-		return stream.EOS{}
+		return stream.ErrEndOfStream()
 	}
 
 	return seq.seed()
@@ -54,17 +55,17 @@ func (seq *seq[T]) maybeSeed() error {
 
 func (seq *seq[T]) seed() error {
 	if seq.items != nil && seq.q.StartAfter == nil {
-		return stream.EOS{}
+		return stream.ErrEndOfStream()
 	}
 
 	val, err := seq.db.s3api.ListObjectsV2(seq.ctx, seq.q)
 	if err != nil {
 		seq.err = err
-		return err
+		return errServiceIO(err, "Seq.seed")
 	}
 
 	if val.KeyCount == 0 {
-		return stream.EOS{}
+		return stream.ErrEndOfStream()
 	}
 
 	items := make([]*string, 0)
@@ -94,7 +95,7 @@ func (seq *seq[T]) FMap(f func(T, io.ReadCloser) error) error {
 		}
 
 		if err := f(key, val); err != nil {
-			return err
+			return errProcessEntity(err, "Seq.FMap", key)
 		}
 	}
 	return seq.err
@@ -104,11 +105,17 @@ func (seq *seq[T]) FMap(f func(T, io.ReadCloser) error) error {
 func (seq *seq[T]) Head() (T, io.ReadCloser, error) {
 	if seq.items == nil {
 		if err := seq.seed(); err != nil {
-			return seq.db.undefined, nil, err
+			return seq.db.undefined, nil,
+				fmt.Errorf("can't seed head of stream: %w", err)
 		}
 	}
 
-	return seq.db.get(seq.ctx, *seq.items[seq.at])
+	val, vio, err := seq.db.get(seq.ctx, *seq.items[seq.at])
+	if err != nil {
+		return seq.db.undefined, nil, errServiceIO(err, "Seq.Head")
+	}
+
+	return val, vio, nil
 }
 
 // Tail selects the all elements except the first one

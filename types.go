@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -200,18 +201,27 @@ type StreamNoContext[T Thing] interface {
 
 NotFound is an error to handle unknown elements
 */
-type NotFound struct{ Key string }
-
-func (e NotFound) Error() string {
-	return fmt.Sprintf("Not Found (%s) ", e.Key)
+type NotFound struct {
+	Key string
+	err error
 }
+
+func ErrNotFound(err error, key string) error {
+	return &NotFound{Key: key, err: err}
+}
+
+func (e *NotFound) Error() string {
+	return fmt.Sprintf("Not Found (%s): %s", e.Key, e.err)
+}
+
+func (e *NotFound) Unwrap() error { return e.err }
+
+func (e *NotFound) NotFound() bool { return true }
 
 /*
 
 EOS error indicates End Of Stream
 */
-type EOS struct{}
-
-func (e EOS) Error() string {
-	return "End of Stream"
+func ErrEndOfStream() error {
+	return errors.New("end of stream")
 }
