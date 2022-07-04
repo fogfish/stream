@@ -1,4 +1,13 @@
+"[#] ci/cd":
+ - '.github/*'
+ - '.github/**/*'
+
+"[#] deps":
+ - 'go.mod'
+ - 'go.sum'
+
 "[#] doc":
+ - '*.md'
  - 'doc/*'
  - 'doc/**/*'
  - 'examples/**/*'
@@ -10,4 +19,3 @@
 "[#] s3":
  - 'internal/s3/*'
  - 'internal/s3/**/*'
-
