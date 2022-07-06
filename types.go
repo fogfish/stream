@@ -153,6 +153,7 @@ StreamWriter defines a generic key-value writer
 */
 type StreamWriter[T Thing] interface {
 	Put(context.Context, T, io.ReadCloser) error
+	Copy(context.Context, T, T) error
 	Remove(context.Context, T) error
 }
 
@@ -162,6 +163,7 @@ StreamWriterNoContext defines a generic key-value writer
 */
 type StreamWriterNoContext[T Thing] interface {
 	Put(T, io.ReadCloser) error
+	Copy(T, T) error
 	Remove(T) error
 }
 

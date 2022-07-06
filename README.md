@@ -105,10 +105,10 @@ note, stream, err := db.Get(
   },
 )
 
-switch v := err.(type) {
+switch {
 case nil:
   // success
-case stream.NotFound:
+case recoverNotFound(err):
   // not found
 default:
   // other i/o error
