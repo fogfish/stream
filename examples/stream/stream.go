@@ -33,6 +33,7 @@ func main() {
 				curie.Namespaces{
 					"person": "t/person/",
 					"note":   "note/",
+					"backup": "backup/note/",
 				},
 			),
 		),
@@ -42,6 +43,7 @@ func main() {
 	exampleGet(db)
 	exampleURL(db)
 	exampleMatch(db)
+	exampleCopy(db)
 	exampleRemove(db)
 }
 
@@ -119,15 +121,34 @@ func exampleMatch(db Stream) {
 	}
 }
 
-func exampleRemove(db Stream) {
+func exampleCopy(db Stream) {
 	for i := 0; i < n; i++ {
 		key := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
-		err := db.Remove(context.TODO(), &key)
 
-		fmt.Println("=[ remove ]=> ", err)
+		bak := Note{
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("backup:%d", i),
+		}
+
+		err := db.Copy(context.TODO(), &key, &bak)
+		fmt.Printf("=[ copy ]=> %v\n", err)
+	}
+}
+
+func exampleRemove(db Stream) {
+	for i := 0; i < n; i++ {
+		for _, key := range []Note{
+			{Author: curie.New("person:%d", i), ID: curie.New("note:%d", i)},
+			{Author: curie.New("person:%d", i), ID: curie.New("backup:%d", i)},
+		} {
+			err := db.Remove(context.TODO(), &key)
+
+			fmt.Println("=[ remove ]=> ", err)
+
+		}
 	}
 }
 
