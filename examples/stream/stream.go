@@ -132,8 +132,8 @@ func exampleRemove(db Stream) {
 }
 
 func recoverNotFound(err error) bool {
-	type notfound interface{ NotFound() bool }
+	type notfound interface{ NotFound() string }
 
 	terr, ok := err.(notfound)
-	return ok && terr.NotFound()
+	return ok && terr.NotFound() != ""
 }

@@ -146,6 +146,18 @@ type Note struct {
 }
 ```
 
+### Error Handling
+
+The library enforces for "assert errors for behavior, not type" as the error handling strategy, see [the post](https://tech.fog.fish/2022/07/05/assert-golang-errors-for-behavior.html) for details. 
+
+Use following behaviors to recover from errors
+
+```go
+type ErrorCode interface{ ErrorCode() string }
+
+type NotFound interface { NotFound() string }
+```
+
 
 ## How To Contribute
 
