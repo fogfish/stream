@@ -47,7 +47,7 @@ func newSeq[T stream.Thing](
 
 func (seq *seq[T]) maybeSeed() error {
 	if !seq.stream {
-		return stream.ErrEndOfStream()
+		return errEndOfStream()
 	}
 
 	return seq.seed()
@@ -55,17 +55,17 @@ func (seq *seq[T]) maybeSeed() error {
 
 func (seq *seq[T]) seed() error {
 	if seq.items != nil && seq.q.StartAfter == nil {
-		return stream.ErrEndOfStream()
+		return errEndOfStream()
 	}
 
 	val, err := seq.db.s3api.ListObjectsV2(seq.ctx, seq.q)
 	if err != nil {
 		seq.err = err
-		return errServiceIO(err, "Seq.seed")
+		return errServiceIO(err)
 	}
 
 	if val.KeyCount == 0 {
-		return stream.ErrEndOfStream()
+		return errEndOfStream()
 	}
 
 	items := make([]*string, 0)
@@ -95,7 +95,7 @@ func (seq *seq[T]) FMap(f func(T, io.ReadCloser) error) error {
 		}
 
 		if err := f(key, val); err != nil {
-			return errProcessEntity(err, "Seq.FMap", key)
+			return errProcessEntity(err, key)
 		}
 	}
 	return seq.err
@@ -112,7 +112,7 @@ func (seq *seq[T]) Head() (T, io.ReadCloser, error) {
 
 	val, vio, err := seq.db.get(seq.ctx, *seq.items[seq.at])
 	if err != nil {
-		return seq.db.undefined, nil, errServiceIO(err, "Seq.Head")
+		return seq.db.undefined, nil, errServiceIO(err)
 	}
 
 	return val, vio, nil

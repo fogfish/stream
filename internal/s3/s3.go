@@ -2,15 +2,12 @@ package s3
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/stream"
 )
 
@@ -61,12 +58,12 @@ func (db *s3fs[T]) Has(
 	}
 	_, err := db.s3api.HeadObject(ctx, req)
 	if err != nil {
-		var nsk *types.NoSuchKey
-		if errors.As(err, &nsk) {
+		switch {
+		case recoverNoSuchKey(err):
 			return false, nil
+		default:
+			return false, errServiceIO(err)
 		}
-
-		return false, errServiceIO(err, "Has")
 	}
 
 	return true, nil
@@ -81,7 +78,7 @@ func (db *s3fs[T]) URL(ctx context.Context, key T, expire time.Duration) (string
 
 	val, err := db.s3sign.PresignGetObject(ctx, req)
 	if err != nil {
-		return "", errServiceIO(err, "URL")
+		return "", errServiceIO(err)
 	}
 
 	return val.URL, nil
@@ -99,12 +96,12 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (T, io.ReadCloser, error
 	}
 	val, err := db.s3api.GetObject(ctx, req)
 	if err != nil {
-		var nsk *types.NoSuchKey
-		if errors.As(err, &nsk) {
-			return db.undefined, nil, stream.ErrNotFound(nil, key)
+		switch {
+		case recoverNoSuchKey(err):
+			return db.undefined, nil, errNotFound(err, key)
+		default:
+			return db.undefined, nil, errServiceIO(err)
 		}
-
-		return db.undefined, nil, errServiceIO(err, "Get")
 	}
 
 	obj := db.codec.Decode(val)
@@ -118,7 +115,7 @@ func (db *s3fs[T]) Put(ctx context.Context, entity T, val io.ReadCloser) error {
 	req.Body = val
 
 	_, err := db.upload.Upload(ctx, req)
-	return errServiceIO(err, "Put")
+	return errServiceIO(err)
 }
 
 // Remove discards the entity from the table
@@ -130,7 +127,7 @@ func (db *s3fs[T]) Remove(ctx context.Context, key T) error {
 
 	_, err := db.s3api.DeleteObject(ctx, req)
 
-	return errServiceIO(err, "Remove")
+	return errServiceIO(err)
 }
 
 func (db *s3fs[T]) Match(ctx context.Context, key T) stream.Seq[T] {
@@ -141,16 +138,4 @@ func (db *s3fs[T]) Match(ctx context.Context, key T) stream.Seq[T] {
 	}
 
 	return newSeq(ctx, db, req, nil)
-}
-
-//
-// Error types
-//
-
-func errServiceIO(err error, op string) error {
-	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", op, err)
-}
-
-func errProcessEntity(err error, op string, thing stream.Thing) error {
-	return fmt.Errorf("[stream.s3.%s] can't process (%s, %s) : %w", op, thing.HashKey(), thing.SortKey(), err)
 }

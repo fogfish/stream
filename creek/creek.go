@@ -1,8 +1,6 @@
 package creek
 
 import (
-	"fmt"
-
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/s3"
 )
@@ -59,12 +57,12 @@ parses connector url
 func factory[T stream.Thing](cfg *stream.Config) (creator[T], error) {
 	switch {
 	case cfg.URI == nil:
-		return nil, fmt.Errorf("undefined storage endpoint")
+		return nil, errUndefinedEndpoint()
 	case len(cfg.URI.Path) < 2:
-		return nil, fmt.Errorf("invalid storage endpoint, missing storage name: %s", cfg.URI.String())
+		return nil, errInvalidEndpoint(cfg.URI.String())
 	case cfg.URI.Scheme == "s3":
 		return s3.New[T], nil
 	default:
-		return nil, fmt.Errorf("unsupported storage schema: %s", cfg.URI.String())
+		return nil, errUnsupportedEndpoint(cfg.URI.String())
 	}
 }
