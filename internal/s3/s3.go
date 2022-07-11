@@ -62,7 +62,7 @@ func (db *s3fs[T]) Has(
 	_, err := db.s3api.HeadObject(ctx, req)
 	if err != nil {
 		switch {
-		case recoverNoSuchKey(err):
+		case recoverNotFound(err):
 			return false, nil
 		default:
 			return false, errServiceIO(err)
