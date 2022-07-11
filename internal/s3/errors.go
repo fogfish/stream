@@ -58,3 +58,11 @@ func recoverNoSuchKey(err error) bool {
 	ok := errors.As(err, &e)
 	return ok && e.ErrorCode() == "NoSuchKey"
 }
+
+//
+func recoverNotFound(err error) bool {
+	var e interface{ ErrorCode() string }
+
+	ok := errors.As(err, &e)
+	return ok && e.ErrorCode() == "NotFound"
+}
