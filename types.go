@@ -80,7 +80,7 @@ type Seq[T Thing] interface {
 StreamGetter defines read by key notation
 */
 type StreamGetter[T Thing] interface {
-	Has(context.Context, T) (bool, error)
+	Has(context.Context, T) (T, error)
 	URL(context.Context, T, time.Duration) (string, error)
 	Get(context.Context, T) (T, io.ReadCloser, error)
 }
@@ -90,7 +90,7 @@ type StreamGetter[T Thing] interface {
 StreamGetterNoContext defines read by key notation
 */
 type StreamGetterNoContext[T Thing] interface {
-	Has(T) (bool, error)
+	Has(T) (T, error)
 	URL(T, time.Duration) (string, error)
 	Get(T) (T, io.ReadCloser, error)
 }
