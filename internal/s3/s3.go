@@ -51,25 +51,23 @@ func New[T stream.Thing](cfg *stream.Config) stream.Stream[T] {
 //
 //-----------------------------------------------------------------------------
 
-func (db *s3fs[T]) Has(
-	ctx context.Context,
-	key T,
-) (bool, error) {
+func (db *s3fs[T]) Has(ctx context.Context, key T) (T, error) {
 	req := &s3.HeadObjectInput{
 		Bucket: db.bucket,
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
-	_, err := db.s3api.HeadObject(ctx, req)
+	val, err := db.s3api.HeadObject(ctx, req)
 	if err != nil {
 		switch {
 		case recoverNotFound(err):
-			return false, nil
+			return db.undefined, nil
 		default:
-			return false, errServiceIO(err)
+			return db.undefined, errServiceIO(err)
 		}
 	}
 
-	return true, nil
+	obj := db.codec.DecodeHasObject(val)
+	return obj, nil
 }
 
 // fetch direct download url
@@ -107,7 +105,7 @@ func (db *s3fs[T]) get(ctx context.Context, key string) (T, io.ReadCloser, error
 		}
 	}
 
-	obj := db.codec.Decode(val)
+	obj := db.codec.DecodeGetObject(val)
 	return obj, val.Body, nil
 }
 

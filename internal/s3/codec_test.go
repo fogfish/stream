@@ -78,7 +78,7 @@ func TestEncode(t *testing.T) {
 
 func TestDecode(t *testing.T) {
 	codec := s3.NewCodec[Note](curie.Namespaces{})
-	val := codec.Decode(fixtureObject())
+	val := codec.DecodeGetObject(fixtureObject())
 
 	it.Ok(t).
 		If(val.CacheControl).Equal("Cache-Control").

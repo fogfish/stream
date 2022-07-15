@@ -55,6 +55,8 @@ func isSystemMetadata(id string) bool {
 		return true
 	case "Expires":
 		return true
+	case "Last-Modified":
+		return true
 	default:
 		return false
 	}
@@ -129,8 +131,13 @@ func (codec Codec[T]) encodeContentType(entity reflect.Value, req *s3.PutObjectI
 func (codec Codec[T]) encodeExpires(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Expires"]
 	if ok {
-		t := entity.FieldByIndex(f.Index).Interface().(time.Time)
-		req.Expires = &t
+		val := entity.FieldByIndex(f.Index).Interface()
+		switch t := val.(type) {
+		case time.Time:
+			req.Expires = &t
+		case *time.Time:
+			req.Expires = t
+		}
 	}
 }
 
@@ -145,7 +152,7 @@ func (codec Codec[T]) encodeMetadata(entity reflect.Value, req *s3.PutObjectInpu
 	}
 }
 
-func (codec Codec[T]) Decode(obj *s3.GetObjectOutput) T {
+func (codec Codec[T]) DecodeGetObject(obj *s3.GetObjectOutput) T {
 	var val T
 
 	// pointer to c makes reflect.ValueOf settable
@@ -160,68 +167,109 @@ func (codec Codec[T]) Decode(obj *s3.GetObjectOutput) T {
 		gen = gen.Elem()
 	}
 
-	codec.decodeCacheControl(gen, obj)
-	codec.decodeContentEncoding(gen, obj)
-	codec.decodeContentLanguage(gen, obj)
-	codec.decodeContentType(gen, obj)
-	codec.decodeExpires(gen, obj)
-	codec.decodeMetadata(gen, obj)
+	codec.decodeCacheControl(gen, obj.CacheControl)
+	codec.decodeContentEncoding(gen, obj.ContentEncoding)
+	codec.decodeContentLanguage(gen, obj.ContentLanguage)
+	codec.decodeContentType(gen, obj.ContentType)
+	codec.decodeExpires(gen, obj.Expires)
+	codec.decodeLastModified(gen, obj.LastModified)
+	codec.decodeMetadata(gen, obj.Metadata)
 
 	return val
 }
 
-func (codec Codec[T]) decodeCacheControl(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) DecodeHasObject(obj *s3.HeadObjectOutput) T {
+	var val T
+
+	// pointer to c makes reflect.ValueOf settable
+	// see The third law of reflection
+	// https://go.dev/blog/laws-of-reflection
+	gen := reflect.ValueOf(&val).Elem()
+	if gen.Kind() == reflect.Pointer {
+		// T is a pointer type, therefore c is nil
+		// it has to be filled with empty value before merging
+		empty := reflect.New(gen.Type().Elem())
+		gen.Set(empty)
+		gen = gen.Elem()
+	}
+
+	codec.decodeCacheControl(gen, obj.CacheControl)
+	codec.decodeContentEncoding(gen, obj.ContentEncoding)
+	codec.decodeContentLanguage(gen, obj.ContentLanguage)
+	codec.decodeContentType(gen, obj.ContentType)
+	codec.decodeExpires(gen, obj.Expires)
+	codec.decodeLastModified(gen, obj.LastModified)
+	codec.decodeMetadata(gen, obj.Metadata)
+
+	return val
+}
+
+func (codec Codec[T]) decodeCacheControl(entity reflect.Value, val *string) {
 	f, ok := codec.system["Cache-Control"]
-	if ok {
-		if obj.CacheControl != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.CacheControl))
-		}
+	if ok && val != nil {
+		codec.decodeValueOfString(entity.FieldByIndex(f.Index), val)
 	}
 }
 
-func (codec Codec[T]) decodeContentEncoding(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) decodeContentEncoding(entity reflect.Value, val *string) {
 	f, ok := codec.system["Content-Encoding"]
-	if ok {
-		if obj.ContentEncoding != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentEncoding))
-		}
+	if ok && val != nil {
+		codec.decodeValueOfString(entity.FieldByIndex(f.Index), val)
 	}
 }
 
-func (codec Codec[T]) decodeContentLanguage(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) decodeContentLanguage(entity reflect.Value, val *string) {
 	f, ok := codec.system["Content-Language"]
-	if ok {
-		if obj.ContentLanguage != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentLanguage))
-		}
+	if ok && val != nil {
+		codec.decodeValueOfString(entity.FieldByIndex(f.Index), val)
 	}
 }
 
-func (codec Codec[T]) decodeContentType(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) decodeContentType(entity reflect.Value, val *string) {
 	f, ok := codec.system["Content-Type"]
-	if ok {
-		if obj.ContentType != nil {
-			entity.FieldByIndex(f.Index).SetString(aws.ToString(obj.ContentType))
-		}
+	if ok && val != nil {
+		codec.decodeValueOfString(entity.FieldByIndex(f.Index), val)
 	}
 }
 
-func (codec Codec[T]) decodeExpires(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) decodeExpires(entity reflect.Value, val *time.Time) {
 	f, ok := codec.system["Expires"]
-	if ok {
-		if obj.Expires != nil {
-			entity.FieldByIndex(f.Index).Set(reflect.ValueOf(*obj.Expires))
-		}
+	if ok && val != nil {
+		codec.decodeValueOfTime(entity.FieldByIndex(f.Index), val)
 	}
 }
 
-func (codec Codec[T]) decodeMetadata(entity reflect.Value, obj *s3.GetObjectOutput) {
+func (codec Codec[T]) decodeLastModified(entity reflect.Value, val *time.Time) {
+	f, ok := codec.system["Last-Modified"]
+	if ok && val != nil {
+		codec.decodeValueOfTime(entity.FieldByIndex(f.Index), val)
+	}
+}
+
+func (codec Codec[T]) decodeMetadata(entity reflect.Value, val map[string]string) {
 	if len(codec.metadata) > 0 {
 		for k, f := range codec.metadata {
-			val, exists := obj.Metadata[k]
-			if exists {
-				entity.FieldByIndex(f.Index).SetString(val)
+			if val, exists := val[k]; exists {
+				codec.decodeValueOfString(entity.FieldByIndex(f.Index), &val)
 			}
 		}
 	}
+}
+
+func (codec Codec[T]) decodeValueOfTime(field reflect.Value, val *time.Time) {
+	if field.Kind() == reflect.Pointer {
+		field.Set(reflect.ValueOf(val))
+		return
+	}
+
+	field.Set(reflect.ValueOf(*val))
+}
+
+func (codec Codec[T]) decodeValueOfString(field reflect.Value, val *string) {
+	if field.Kind() == reflect.Pointer {
+		field.Set(reflect.ValueOf(val))
+		return
+	}
+
+	field.SetString(*val)
 }

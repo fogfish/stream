@@ -14,8 +14,14 @@ import (
 )
 
 type Note struct {
-	Author curie.IRI `metadata:"author"`
-	ID     curie.IRI `metadata:"id"`
+	Author          curie.IRI  `metadata:"author"`
+	ID              curie.IRI  `metadata:"id"`
+	CacheControl    *string    `metadata:"Cache-Control"`
+	ContentEncoding *string    `metadata:"Content-Encoding"`
+	ContentLanguage *string    `metadata:"Content-Language"`
+	ContentType     *string    `metadata:"Content-Type"`
+	Expires         *time.Time `metadata:"Expires"`
+	LastModified    *time.Time `metadata:"Last-Modified"`
 }
 
 func (n Note) HashKey() curie.IRI { return n.Author }
@@ -41,6 +47,7 @@ func main() {
 
 	examplePut(db)
 	exampleGet(db)
+	exampleHas(db)
 	exampleURL(db)
 	exampleMatch(db)
 	exampleCopy(db)
@@ -84,6 +91,26 @@ func exampleGet(db Stream) {
 			fmt.Printf("=[ get ]=> Not found: (%v, %v)\n", key.Author, key.ID)
 		default:
 			fmt.Printf("=[ get ]=> Fail: %v\n", err)
+		}
+	}
+}
+
+func exampleHas(db Stream) {
+	for i := 0; i < n; i++ {
+		key := Note{
+			Author: curie.New("person:%d", i),
+			ID:     curie.New("note:%d", i),
+		}
+
+		val, err := db.Has(context.TODO(), &key)
+
+		switch {
+		case err == nil:
+			fmt.Printf("=[ has ]=> %+v\n", val)
+		case recoverNotFound(err):
+			fmt.Printf("=[ has ]=> Not found: (%v, %v)\n", key.Author, key.ID)
+		default:
+			fmt.Printf("=[ has ]=> Fail: %v\n", err)
 		}
 	}
 }

@@ -138,11 +138,12 @@ type Note struct {
   Custom    string `metadata:"Custom"`
   Attribute string `metadata:"Attribute"`
   // System metadata
-  CacheControl    string    `metadata:"Cache-Control"`
-  ContentEncoding string    `metadata:"Content-Encoding"`
-  ContentLanguage string    `metadata:"Content-Language"`
-  ContentType     string    `metadata:"Content-Type"`
-  Expires         time.Time `metadata:"Expires"`
+  CacheControl    *string    `metadata:"Cache-Control"`
+  ContentEncoding *string    `metadata:"Content-Encoding"`
+  ContentLanguage *string    `metadata:"Content-Language"`
+  ContentType     *string    `metadata:"Content-Type"`
+  Expires         *time.Time `metadata:"Expires"`
+  LastModified    *time.Time `metadata:"Last-Modified"`
 }
 ```
 
