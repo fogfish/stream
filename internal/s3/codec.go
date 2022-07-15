@@ -95,36 +95,28 @@ func (codec Codec[T]) Encode(entity T) *s3.PutObjectInput {
 func (codec Codec[T]) encodeCacheControl(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Cache-Control"]
 	if ok {
-		if val := entity.FieldByIndex(f.Index).String(); val != "" {
-			req.CacheControl = aws.String(val)
-		}
+		req.CacheControl = codec.encodeValueOfString(entity.FieldByIndex(f.Index))
 	}
 }
 
 func (codec Codec[T]) encodeContentEncoding(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Encoding"]
 	if ok {
-		if val := entity.FieldByIndex(f.Index).String(); val != "" {
-			req.ContentEncoding = aws.String(val)
-		}
+		req.ContentEncoding = codec.encodeValueOfString(entity.FieldByIndex(f.Index))
 	}
 }
 
 func (codec Codec[T]) encodeContentLanguage(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Language"]
 	if ok {
-		if val := entity.FieldByIndex(f.Index).String(); val != "" {
-			req.ContentLanguage = aws.String(val)
-		}
+		req.ContentLanguage = codec.encodeValueOfString(entity.FieldByIndex(f.Index))
 	}
 }
 
 func (codec Codec[T]) encodeContentType(entity reflect.Value, req *s3.PutObjectInput) {
 	f, ok := codec.system["Content-Type"]
 	if ok {
-		if val := entity.FieldByIndex(f.Index).String(); val != "" {
-			req.ContentType = aws.String(val)
-		}
+		req.ContentType = codec.encodeValueOfString(entity.FieldByIndex(f.Index))
 	}
 }
 
@@ -145,8 +137,9 @@ func (codec Codec[T]) encodeMetadata(entity reflect.Value, req *s3.PutObjectInpu
 	if len(codec.metadata) > 0 {
 		req.Metadata = map[string]string{}
 		for k, f := range codec.metadata {
-			if val := entity.FieldByIndex(f.Index).String(); val != "" {
-				req.Metadata[k] = val
+			val := codec.encodeValueOfString(entity.FieldByIndex(f.Index))
+			if val != nil {
+				req.Metadata[k] = *val
 			}
 		}
 	}
@@ -263,6 +256,19 @@ func (codec Codec[T]) decodeValueOfTime(field reflect.Value, val *time.Time) {
 	}
 
 	field.Set(reflect.ValueOf(*val))
+}
+
+func (codec Codec[T]) encodeValueOfString(field reflect.Value) *string {
+	if field.Kind() == reflect.Pointer {
+		field = field.Elem()
+	}
+
+	val := field.String()
+	if val == "" {
+		return nil
+	}
+
+	return &val
 }
 
 func (codec Codec[T]) decodeValueOfString(field reflect.Value, val *string) {
