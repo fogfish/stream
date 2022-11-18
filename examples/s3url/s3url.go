@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/fogfish/curie"
@@ -10,8 +9,8 @@ import (
 )
 
 type Note struct {
-	Author curie.IRI //`metadata:"author"`
-	ID     curie.IRI //`metadata:"id"`
+	Author curie.IRI `metadata:"author"`
+	ID     curie.IRI `metadata:"id"`
 	// CacheControl *string   `metadata:"Cache-Control"`
 	ContentType *string `metadata:"Content-Type"`
 	// Expires      *time.Time `metadata:"Expires"`
@@ -32,13 +31,15 @@ func main() {
 		// ContentType: aws.String("image/jpg"),
 	}
 
-	err = db.Match(context.TODO(), note, 30*time.Minute).
-		FMap(func(s string) error {
-			fmt.Println(s)
-			return nil
-		})
+	db.Put(context.TODO(), note, 30*time.Minute)
 
-	fmt.Println(err)
+	// err = db.Match(context.TODO(), note, 30*time.Minute).
+	// 	FMap(func(s string) error {
+	// 		fmt.Println(s)
+	// 		return nil
+	// 	})
+
+	// fmt.Println(err)
 	// fmt.Println(url)
 
 }

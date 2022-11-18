@@ -2,8 +2,6 @@ package s3url
 
 import (
 	"context"
-	"fmt"
-	"runtime"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -55,14 +53,4 @@ func (seq *Seq[T]) FMap(f func(string) error) error {
 	}
 
 	return seq.Seq.Error()
-}
-
-func errProcessEntity(err error, key string) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] can't process (%s) : %w", name, key, err)
 }

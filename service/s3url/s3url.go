@@ -41,6 +41,7 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 
+	// TODO: head (check is exists)
 	_, err := db.client.PutObject(ctx, req)
 	if err != nil {
 		return "", err
@@ -52,6 +53,25 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (
 	}
 
 	return val.URL, nil
+}
+
+func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
+	req := &s3.HeadObjectInput{
+		Bucket: aws.String(db.bucket),
+		Key:    aws.String(db.codec.EncodeKey(key)),
+	}
+	val, err := db.client.HeadObject(ctx, req)
+	if err != nil {
+		switch {
+		case recoverNotFound(err):
+			return db.undefined, nil
+		default:
+			return db.undefined, errServiceIO(err)
+		}
+	}
+
+	obj := db.codec.DecodeHasObject(val)
+	return obj, nil
 }
 
 // Get
