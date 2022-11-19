@@ -46,10 +46,6 @@ func (e *notFound) Unwrap() error { return e.err }
 
 func (e *notFound) NotFound() string { return e.key }
 
-func errEndOfStream() error {
-	return errors.New("end of stream")
-}
-
 func recoverNoSuchKey(err error) bool {
 	var e interface{ ErrorCode() string }
 
