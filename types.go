@@ -3,19 +3,15 @@ package stream
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/fogfish/curie"
 )
 
-/*
-
-Thing is the most generic item type used by the library to
-abstract writable/readable streams into storage services.
-
-The interfaces declares anything that have a unique identifier.
-The unique identity is exposed by pair of string: HashKey and SortKey.
-*/
+// Thing is the most generic item type used by the library to
+// abstract writable/readable streams into storage services.
+//
+// The interfaces declares anything that have a unique identifier.
+// The unique identity is exposed by pair of string: HashKey and SortKey.
 type Thing interface {
 	HashKey() curie.IRI
 	SortKey() curie.IRI
@@ -27,10 +23,7 @@ type Thing interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-SeqLazy is an interface to iterate through collection of objects at storage
-*/
+// SeqLazy is an interface to iterate through collection of objects at storage
 type SeqLazy[T Thing] interface {
 	// Head lifts first element of sequence
 	Head() (T, io.ReadCloser, error)
@@ -42,10 +35,7 @@ type SeqLazy[T Thing] interface {
 	Cursor() Thing
 }
 
-/*
-
-SeqConfig configures optional sequence behavior
-*/
+// SeqConfig configures optional sequence behavior
 type SeqConfig[T Thing] interface {
 	// Limit sequence size to N elements (pagination)
 	Limit(int64) Seq[T]
@@ -55,12 +45,9 @@ type SeqConfig[T Thing] interface {
 	Reverse() Seq[T]
 }
 
-/*
-
-Seq is an interface to transform collection of objects
-
-  db.Match(...).FMap(func(key Thing, val io.ReadCloser) error { ... })
-*/
+// Seq is an interface to transform collection of objects
+//
+//	db.Match(...).FMap(func(key Thing, val io.ReadCloser) error { ... })
 type Seq[T Thing] interface {
 	SeqLazy[T]
 	SeqConfig[T]
@@ -75,24 +62,10 @@ type Seq[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-StreamGetter defines read by key notation
-*/
+// StreamGetter defines read by key notation
 type StreamGetter[T Thing] interface {
 	Has(context.Context, T) (T, error)
-	URL(context.Context, T, time.Duration) (string, error)
 	Get(context.Context, T) (T, io.ReadCloser, error)
-}
-
-/*
-
-StreamGetterNoContext defines read by key notation
-*/
-type StreamGetterNoContext[T Thing] interface {
-	Has(T) (T, error)
-	URL(T, time.Duration) (string, error)
-	Get(T) (T, io.ReadCloser, error)
 }
 
 //-----------------------------------------------------------------------------
@@ -101,20 +74,9 @@ type StreamGetterNoContext[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-StreamPattern defines simple pattern matching lookup I/O
-*/
+// StreamPattern defines simple pattern matching lookup I/O
 type StreamPattern[T Thing] interface {
 	Match(context.Context, T) Seq[T]
-}
-
-/*
-
-StreamPatternNoContext defines simple pattern matching lookup I/O
-*/
-type StreamPatternNoContext[T Thing] interface {
-	Match(T) Seq[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -123,22 +85,10 @@ type StreamPatternNoContext[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-KeyValReader a generic key-value trait to read domain objects
-*/
+// KeyValReader a generic key-value trait to read domain objects
 type StreamReader[T Thing] interface {
 	StreamGetter[T]
 	StreamPattern[T]
-}
-
-/*
-
-StreamReaderNoContext a generic key-value trait to read domain objects
-*/
-type StreamReaderNoContext[T Thing] interface {
-	StreamGetterNoContext[T]
-	StreamPatternNoContext[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -147,24 +97,11 @@ type StreamReaderNoContext[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-StreamWriter defines a generic key-value writer
-*/
+// StreamWriter defines a generic key-value writer
 type StreamWriter[T Thing] interface {
 	Put(context.Context, T, io.ReadCloser) error
 	Copy(context.Context, T, T) error
 	Remove(context.Context, T) error
-}
-
-/*
-
-StreamWriterNoContext defines a generic key-value writer
-*/
-type StreamWriterNoContext[T Thing] interface {
-	Put(T, io.ReadCloser) error
-	Copy(T, T) error
-	Remove(T) error
 }
 
 //-----------------------------------------------------------------------------
@@ -173,20 +110,8 @@ type StreamWriterNoContext[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-/*
-
-Stream is a generic key-value trait to access domain objects.
-*/
-type Stream[T Thing] interface {
+// Stream is a generic key-value trait to access domain objects.
+type Streamer[T Thing] interface {
 	StreamReader[T]
 	StreamWriter[T]
-}
-
-/*
-
-StreamNoContext is a generic key-value trait to access domain objects.
-*/
-type StreamNoContext[T Thing] interface {
-	StreamReaderNoContext[T]
-	StreamWriterNoContext[T]
 }

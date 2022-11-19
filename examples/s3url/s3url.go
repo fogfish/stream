@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/fogfish/curie"
+	"github.com/fogfish/gurl/http"
+	ƒ "github.com/fogfish/gurl/http/recv"
+	ø "github.com/fogfish/gurl/http/send"
 	"github.com/fogfish/stream"
-	"github.com/fogfish/stream/service/s3"
+	"github.com/fogfish/stream/service/s3url"
 )
 
 // Number of object to create
@@ -18,20 +19,20 @@ const n = 5
 
 // Note is an object manipulated at storage
 type Note struct {
-	Author          curie.IRI  `metadata:"author"`
-	ID              curie.IRI  `metadata:"id"`
-	ContentType     string     `metadata:"Content-Type"`
-	ContentLanguage string     `metadata:"Content-Language"`
-	LastModified    *time.Time `metadata:"Last-Modified"`
+	Author          curie.IRI `metadata:"author"`
+	ID              curie.IRI `metadata:"id"`
+	ContentType     string    `metadata:"Content-Type"`
+	ContentLanguage string    `metadata:"Content-Language"`
+	Content         string
 }
 
 func (n Note) HashKey() curie.IRI { return n.Author }
 func (n Note) SortKey() curie.IRI { return n.ID }
 
-type Storage = *s3.Storage[Note]
+type Storage = *s3url.Storage[Note]
 
 func main() {
-	db, err := s3.New[Note](os.Args[1],
+	db, err := s3url.New[Note](os.Args[1],
 		stream.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
 			"note":   "note/",
@@ -51,19 +52,24 @@ func main() {
 }
 
 func examplePut(db Storage) {
+	http := http.New()
+
 	for i := 0; i < n; i++ {
 		note := Note{
 			Author:          curie.New("person:%d", i),
 			ID:              curie.New("note:%d", i),
 			ContentType:     "text/plain",
 			ContentLanguage: "en",
+			Content:         fmt.Sprintf("This is example note %d.", i),
 		}
-		data := io.NopCloser(
-			strings.NewReader(
-				fmt.Sprintf("This is example note %d.", i),
-			),
-		)
-		err := db.Put(context.Background(), note, data)
+
+		uri, err := db.Put(context.Background(), note, 1*time.Minute)
+		if err != nil {
+			fmt.Printf("=[ put ]=> failed: %s", err)
+			continue
+		}
+
+		err = examplePutByURL(http, uri, note)
 		if err != nil {
 			fmt.Printf("=[ put ]=> failed: %s", err)
 			continue
@@ -73,53 +79,94 @@ func examplePut(db Storage) {
 	}
 }
 
+func examplePutByURL(http http.Stack, uri string, note Note) error {
+	return http.IO(context.Background(),
+		ø.PUT.URI(uri),
+		ø.ContentType.Text,
+		ø.Header("X-Amz-Meta-Author").Is(string(note.Author)),
+		ø.Header("X-Amz-Meta-Id").Is(string(note.ID)),
+		ø.Header("Content-Language").Is(note.ContentLanguage),
+		ø.Send(note.Content),
+
+		ƒ.Status.OK,
+	)
+}
+
 func exampleGet(db Storage) {
+	http := http.New()
+
 	for i := 0; i < n; i++ {
-		key := Note{
+		note := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
 
-		note, sin, err := db.Get(context.Background(), key)
+		uri, err := db.Get(context.Background(), note, 1*time.Minute)
 		if err != nil {
-			fmt.Printf("=[ get ]=> failed: %s\n", err)
+			fmt.Printf("=[ get ]=> failed: %s", err)
 			continue
 		}
 
-		data, err := io.ReadAll(sin)
+		note, err = exampleGetByURL(http, uri)
 		if err != nil {
-			fmt.Printf("=[ get ]=> failed: %s\n", err)
+			fmt.Printf("=[ get ]=> failed: %s", err)
 			continue
 		}
 
-		fmt.Printf("=[ get ]=> %+v\n%s\n", note, data)
+		fmt.Printf("=[ get ]=> %+v\n", note)
 	}
+}
+
+func exampleGetByURL(http http.Stack, uri string) (Note, error) {
+	var (
+		note Note
+		data []byte
+	)
+	err := http.IO(context.Background(),
+		ø.GET.URI(uri),
+		ø.Accept.TextPlain,
+
+		ƒ.Status.OK,
+		ƒ.Header("X-Amz-Meta-Author").To((*string)(&note.Author)),
+		ƒ.Header("X-Amz-Meta-Id").To((*string)(&note.ID)),
+		ƒ.Header("Content-Type").To(&note.ContentType),
+		ƒ.Header("Content-Language").To(&note.ContentLanguage),
+		ƒ.Bytes(&data),
+	)
+
+	note.Content = string(data)
+	return note, err
 }
 
 func exampleHas(db Storage) {
 	for i := 0; i < n; i++ {
-		key := Note{
+		note := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
 
-		note, err := db.Has(context.Background(), key)
+		val, err := db.Has(context.Background(), note)
 		if err != nil {
-			fmt.Printf("=[ has ]=> failed: %s\n", err)
+			fmt.Printf("=[ has ]=> failed: %v\n", err)
 			continue
 		}
 
-		fmt.Printf("=[ has ]=> %+v\n", note)
+		fmt.Printf("=[ has ]=> %+v\n", val)
 	}
 }
 
 func exampleMatch(db Storage) {
+	http := http.New()
+
 	key := Note{Author: curie.New("person:")}
-	err := db.Match(context.Background(), key).
-		FMap(func(note Note, sin io.ReadCloser) error {
-			defer sin.Close()
-			data, _ := io.ReadAll(sin)
-			fmt.Printf("=[ match ]=> %+v %s\n", note, data)
+	err := db.Match(context.Background(), key, 1*time.Minute).
+		FMap(func(key string, uri string) error {
+			note, err := exampleGetByURL(http, uri)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("=[ match ]=> %+v\n", note)
 			return nil
 		})
 	if err != nil {

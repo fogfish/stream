@@ -1,4 +1,4 @@
-package s3
+package codec
 
 import (
 	"reflect"
@@ -13,12 +13,13 @@ import (
 )
 
 type Codec[T stream.Thing] struct {
-	system   map[string]hseq.Type[T]
-	metadata map[string]hseq.Type[T]
-	prefixes curie.Prefixes
+	system    map[string]hseq.Type[T]
+	metadata  map[string]hseq.Type[T]
+	prefixes  curie.Prefixes
+	Undefined T
 }
 
-func NewCodec[T stream.Thing](prefixes curie.Prefixes) Codec[T] {
+func New[T stream.Thing](prefixes curie.Prefixes) Codec[T] {
 	codec := Codec[T]{
 		system:   make(map[string]hseq.Type[T]),
 		metadata: make(map[string]hseq.Type[T]),
@@ -62,7 +63,6 @@ func isSystemMetadata(id string) bool {
 	}
 }
 
-//
 func (codec Codec[T]) EncodeKey(key stream.Thing) string {
 	hkey := curie.URI(codec.prefixes, key.HashKey())
 	skey := curie.URI(codec.prefixes, key.SortKey())
@@ -260,6 +260,10 @@ func (codec Codec[T]) decodeValueOfTime(field reflect.Value, val *time.Time) {
 
 func (codec Codec[T]) encodeValueOfString(field reflect.Value) *string {
 	if field.Kind() == reflect.Pointer {
+		if field.IsNil() {
+			return nil
+		}
+
 		field = field.Elem()
 	}
 

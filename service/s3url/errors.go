@@ -1,11 +1,9 @@
-package s3
+package s3url
 
 import (
 	"errors"
 	"fmt"
 	"runtime"
-
-	"github.com/fogfish/stream"
 )
 
 func errServiceIO(err error) error {
@@ -15,17 +13,17 @@ func errServiceIO(err error) error {
 		name = runtime.FuncForPC(pc).Name()
 	}
 
-	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", name, err)
+	return fmt.Errorf("[stream.s3url.%s] service i/o failed: %w", name, err)
 }
 
-func errProcessEntity(err error, thing stream.Thing) error {
+func errProcessURL(err error, url string) error {
 	var name string
 
 	if pc, _, _, ok := runtime.Caller(1); ok {
 		name = runtime.FuncForPC(pc).Name()
 	}
 
-	return fmt.Errorf("[stream.s3.%s] can't process (%s, %s) : %w", name, thing.HashKey(), thing.SortKey(), err)
+	return fmt.Errorf("[stream.s3url.%s] can't process %s : %w", name, url, err)
 }
 
 // NotFound is an error to handle unknown elements
@@ -46,20 +44,6 @@ func (e *notFound) Unwrap() error { return e.err }
 
 func (e *notFound) NotFound() string { return e.key }
 
-//
-func errEndOfStream() error {
-	return errors.New("end of stream")
-}
-
-//
-func recoverNoSuchKey(err error) bool {
-	var e interface{ ErrorCode() string }
-
-	ok := errors.As(err, &e)
-	return ok && e.ErrorCode() == "NoSuchKey"
-}
-
-//
 func recoverNotFound(err error) bool {
 	var e interface{ ErrorCode() string }
 
