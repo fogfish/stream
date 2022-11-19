@@ -1,4 +1,4 @@
-package s3_test
+package codec_test
 
 import (
 	"testing"
@@ -8,7 +8,7 @@ import (
 	a3 "github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/curie"
 	"github.com/fogfish/it"
-	"github.com/fogfish/stream/internal/s3"
+	"github.com/fogfish/stream/internal/codec"
 )
 
 type Note struct {
@@ -80,7 +80,7 @@ func fixtureHasObject() *a3.HeadObjectOutput {
 }
 
 func TestEncode(t *testing.T) {
-	codec := s3.NewCodec[Note](curie.Namespaces{})
+	codec := codec.New[Note](curie.Namespaces{})
 	val := codec.Encode(fixtureNote())
 
 	it.Ok(t).
@@ -96,7 +96,7 @@ func TestEncode(t *testing.T) {
 }
 
 func TestDecodeWithGetObject(t *testing.T) {
-	codec := s3.NewCodec[Note](curie.Namespaces{})
+	codec := codec.New[Note](curie.Namespaces{})
 	val := codec.DecodeGetObject(fixtureGetObject())
 
 	it.Ok(t).
@@ -113,7 +113,7 @@ func TestDecodeWithGetObject(t *testing.T) {
 }
 
 func TestDecodeWithHasObject(t *testing.T) {
-	codec := s3.NewCodec[Note](curie.Namespaces{})
+	codec := codec.New[Note](curie.Namespaces{})
 	val := codec.DecodeHasObject(fixtureHasObject())
 
 	it.Ok(t).

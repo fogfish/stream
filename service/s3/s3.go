@@ -1,11 +1,12 @@
-package s3url
+package s3
 
 import (
 	"context"
-	"time"
+	"io"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/codec"
@@ -14,7 +15,7 @@ import (
 type Storage[T stream.Thing] struct {
 	bucket string
 	client *s3.Client
-	signer *s3.PresignClient
+	upload *manager.Uploader
 	waiter *s3.ObjectExistsWaiter
 	codec  codec.Codec[T]
 }
@@ -30,13 +31,13 @@ func New[T stream.Thing](bucket string, opts ...stream.Option) (*Storage[T], err
 		return nil, err
 	}
 
-	signer := s3.NewPresignClient(client)
+	upload := manager.NewUploader(client)
 	waiter := s3.NewObjectExistsWaiter(client)
 
 	return &Storage[T]{
 		bucket: bucket,
 		client: client,
-		signer: signer,
+		upload: upload,
 		waiter: waiter,
 		codec:  codec.New[T](conf.Prefixes),
 	}, nil
@@ -59,34 +60,16 @@ func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
 }
 
 // Put
-func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (string, error) {
+func (db *Storage[T]) Put(ctx context.Context, entity T, val io.ReadCloser) error {
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
+	req.Body = val
 
-	_, err := db.client.HeadObject(ctx,
-		&s3.HeadObjectInput{
-			Bucket: aws.String(db.bucket),
-			Key:    aws.String(db.codec.EncodeKey(entity)),
-		},
-	)
+	_, err := db.upload.Upload(ctx, req)
 	if err != nil {
-		switch {
-		case recoverNotFound(err):
-			_, err := db.client.PutObject(ctx, req)
-			if err != nil {
-				return "", errServiceIO(err)
-			}
-		default:
-			return "", errServiceIO(err)
-		}
+		return errServiceIO(err)
 	}
-
-	val, err := db.signer.PresignPutObject(ctx, req)
-	if err != nil {
-		return "", err
-	}
-
-	return val.URL, nil
+	return nil
 }
 
 // Remove
@@ -124,23 +107,32 @@ func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
 	return obj, nil
 }
 
-// Get
-func (db *Storage[T]) Get(ctx context.Context, key T, expire time.Duration) (string, error) {
+// Get item from storage
+func (db *Storage[T]) Get(ctx context.Context, key T) (T, io.ReadCloser, error) {
+	return db.get(ctx, db.codec.EncodeKey(key))
+}
+
+func (db *Storage[T]) get(ctx context.Context, key string) (T, io.ReadCloser, error) {
 	req := &s3.GetObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
-
-	val, err := db.signer.PresignGetObject(ctx, req)
+	val, err := db.client.GetObject(ctx, req)
 	if err != nil {
-		return "", err
+		switch {
+		case recoverNoSuchKey(err):
+			return db.codec.Undefined, nil, errNotFound(err, key)
+		default:
+			return db.codec.Undefined, nil, errServiceIO(err)
+		}
 	}
 
-	return val.URL, nil
+	obj := db.codec.DecodeGetObject(val)
+	return obj, val.Body, nil
 }
 
 // Match
-func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration) *Seq[T] {
+func (db *Storage[T]) Match(ctx context.Context, key T) *Seq[T] {
 	req := &s3.ListObjectsV2Input{
 		Bucket:  aws.String(db.bucket),
 		MaxKeys: int32(1000),

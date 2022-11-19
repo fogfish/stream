@@ -1,9 +1,9 @@
-package s3url
+package s3
 
 import (
 	"context"
+	"io"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/seq"
@@ -21,34 +21,29 @@ func newSeq[T stream.Thing](storage *Storage[T], q *s3.ListObjectsV2Input) *Seq[
 	}
 }
 
-func (seq *Seq[T]) Head() (string, string, error) {
+func (seq *Seq[T]) Head() (T, io.ReadCloser, error) {
 	key, err := seq.Seq.Head()
 	if err != nil {
-		return "", "", err
+		return seq.storage.codec.Undefined, nil, err
 	}
 
-	req := &s3.GetObjectInput{
-		Bucket: aws.String(seq.storage.bucket),
-		Key:    aws.String(key),
-	}
-
-	val, err := seq.storage.signer.PresignGetObject(context.Background(), req)
+	val, vio, err := seq.storage.get(context.Background(), key)
 	if err != nil {
-		return "", "", err
+		return seq.storage.codec.Undefined, nil, errServiceIO(err)
 	}
 
-	return key, val.URL, nil
+	return val, vio, nil
 }
 
-func (seq *Seq[T]) FMap(f func(string, string) error) error {
+func (seq *Seq[T]) FMap(f func(T, io.ReadCloser) error) error {
 	for seq.Tail() {
-		key, url, err := seq.Head()
+		key, val, err := seq.Head()
 		if err != nil {
 			return err
 		}
 
-		if err := f(key, url); err != nil {
-			return errProcessURL(err, url)
+		if err := f(key, val); err != nil {
+			return errProcessEntity(err, key)
 		}
 	}
 

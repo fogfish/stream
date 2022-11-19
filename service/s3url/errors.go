@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"runtime"
-
-	"github.com/fogfish/stream"
 )
 
 func errServiceIO(err error) error {
@@ -18,14 +16,14 @@ func errServiceIO(err error) error {
 	return fmt.Errorf("[stream.s3url.%s] service i/o failed: %w", name, err)
 }
 
-func errProcessEntity(err error, thing stream.Thing) error {
+func errProcessURL(err error, url string) error {
 	var name string
 
 	if pc, _, _, ok := runtime.Caller(1); ok {
 		name = runtime.FuncForPC(pc).Name()
 	}
 
-	return fmt.Errorf("[stream.s3url.%s] can't process (%s, %s) : %w", name, thing.HashKey(), thing.SortKey(), err)
+	return fmt.Errorf("[stream.s3url.%s] can't process %s : %w", name, url, err)
 }
 
 // NotFound is an error to handle unknown elements

@@ -10,178 +10,158 @@ import (
 
 	"github.com/fogfish/curie"
 	"github.com/fogfish/stream"
-	"github.com/fogfish/stream/creek"
+	"github.com/fogfish/stream/service/s3"
 )
 
+// Number of object to create
+const n = 5
+
+// Note is an object manipulated at storage
 type Note struct {
 	Author          curie.IRI  `metadata:"author"`
 	ID              curie.IRI  `metadata:"id"`
-	CacheControl    *string    `metadata:"Cache-Control"`
-	ContentEncoding *string    `metadata:"Content-Encoding"`
-	ContentLanguage *string    `metadata:"Content-Language"`
-	ContentType     *string    `metadata:"Content-Type"`
-	Expires         *time.Time `metadata:"Expires"`
+	ContentType     string     `metadata:"Content-Type"`
+	ContentLanguage string     `metadata:"Content-Language"`
 	LastModified    *time.Time `metadata:"Last-Modified"`
 }
 
 func (n Note) HashKey() curie.IRI { return n.Author }
 func (n Note) SortKey() curie.IRI { return n.ID }
 
-type Stream stream.Stream[*Note]
+type Storage = *s3.Storage[Note]
 
-//
-//
 func main() {
-	db := creek.Must(
-		creek.New[*Note](
-			stream.WithURI(os.Args[1]),
-			stream.WithPrefixes(
-				curie.Namespaces{
-					"person": "t/person/",
-					"note":   "note/",
-					"backup": "backup/note/",
-				},
-			),
-		),
+	db, err := s3.New[Note](os.Args[1],
+		stream.WithPrefixes(curie.Namespaces{
+			"person": "t/person/",
+			"note":   "note/",
+			"backup": "backup/note/",
+		}),
 	)
+	if err != nil {
+		panic(err)
+	}
 
 	examplePut(db)
 	exampleGet(db)
 	exampleHas(db)
-	exampleURL(db)
 	exampleMatch(db)
 	exampleCopy(db)
 	exampleRemove(db)
 }
 
-const n = 5
-
-func examplePut(db Stream) {
+func examplePut(db Storage) {
 	for i := 0; i < n; i++ {
-		key := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
+		note := Note{
+			Author:          curie.New("person:%d", i),
+			ID:              curie.New("note:%d", i),
+			ContentType:     "text/plain",
+			ContentLanguage: "en",
 		}
-		val := io.NopCloser(
+		data := io.NopCloser(
 			strings.NewReader(
 				fmt.Sprintf("This is example note %d.", i),
 			),
 		)
-		err := db.Put(context.TODO(), &key, val)
+		err := db.Put(context.Background(), note, data)
+		if err != nil {
+			fmt.Printf("=[ put ]=> failed: %s", err)
+			continue
+		}
 
-		fmt.Println("=[ put ]=> ", err)
+		fmt.Printf("=[ put ]=> %+v\n", note)
 	}
 }
 
-func exampleGet(db Stream) {
+func exampleGet(db Storage) {
 	for i := 0; i < n; i++ {
 		key := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
 
-		val, sio, err := db.Get(context.TODO(), &key)
-		defer sio.Close()
-
-		switch {
-		case err == nil:
-			b, _ := io.ReadAll(sio)
-			fmt.Printf("=[ get ]=> %+v %s\n", val, b)
-		case recoverNotFound(err):
-			fmt.Printf("=[ get ]=> Not found: (%v, %v)\n", key.Author, key.ID)
-		default:
-			fmt.Printf("=[ get ]=> Fail: %v\n", err)
+		note, sin, err := db.Get(context.Background(), key)
+		if err != nil {
+			fmt.Printf("=[ get ]=> failed: %s\n", err)
+			continue
 		}
+
+		data, err := io.ReadAll(sin)
+		if err != nil {
+			fmt.Printf("=[ get ]=> failed: %s\n", err)
+			continue
+		}
+
+		fmt.Printf("=[ get ]=> %+v\n%s\n", note, data)
 	}
 }
 
-func exampleHas(db Stream) {
+func exampleHas(db Storage) {
 	for i := 0; i < n; i++ {
 		key := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
 
-		val, err := db.Has(context.TODO(), &key)
-
-		switch {
-		case err == nil:
-			fmt.Printf("=[ has ]=> %+v\n", val)
-		case recoverNotFound(err):
-			fmt.Printf("=[ has ]=> Not found: (%v, %v)\n", key.Author, key.ID)
-		default:
-			fmt.Printf("=[ has ]=> Fail: %v\n", err)
+		note, err := db.Has(context.Background(), key)
+		if err != nil {
+			fmt.Printf("=[ has ]=> failed: %s\n", err)
+			continue
 		}
+
+		fmt.Printf("=[ has ]=> %+v\n", note)
 	}
 }
 
-func exampleURL(db Stream) {
-	for i := 0; i < n; i++ {
-		key := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
-		}
-
-		val, err := db.URL(context.TODO(), &key, 20*time.Minute)
-		switch {
-		case err == nil:
-			fmt.Printf("=[ url ]=> %s\n", val)
-		case recoverNotFound(err):
-			fmt.Printf("=[ url ]=> Not found: (%v, %v)\n", key.Author, key.ID)
-		default:
-			fmt.Printf("=[ url ]=> Fail: %v\n", err)
-		}
-	}
-}
-
-func exampleMatch(db Stream) {
+func exampleMatch(db Storage) {
 	key := Note{Author: curie.New("person:")}
-	err := db.Match(context.TODO(), &key).
-		FMap(func(key *Note, val io.ReadCloser) error {
-			defer val.Close()
-			b, _ := io.ReadAll(val)
-			fmt.Printf("=[ match ]=> %+v %s\n", key, b)
+	err := db.Match(context.Background(), key).
+		FMap(func(note Note, sin io.ReadCloser) error {
+			defer sin.Close()
+			data, _ := io.ReadAll(sin)
+			fmt.Printf("=[ match ]=> %+v %s\n", note, data)
 			return nil
 		})
 	if err != nil {
-		fmt.Printf("=[ match ]=> %v\n", err)
+		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
 }
 
-func exampleCopy(db Stream) {
+func exampleCopy(db Storage) {
 	for i := 0; i < n; i++ {
-		key := Note{
+		note := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("note:%d", i),
 		}
 
-		bak := Note{
+		backup := Note{
 			Author: curie.New("person:%d", i),
 			ID:     curie.New("backup:%d", i),
 		}
 
-		err := db.Copy(context.TODO(), &key, &bak)
-		fmt.Printf("=[ copy ]=> %v\n", err)
+		err := db.With(note).CopyTo(backup).Wait(1 * time.Minute)
+		if err != nil {
+			fmt.Printf("=[ copy ]=> failed: %v\n", err)
+			continue
+		}
+
+		fmt.Printf("=[ copy ]=> %+v to %+v\n", note, backup)
 	}
 }
 
-func exampleRemove(db Stream) {
+func exampleRemove(db Storage) {
 	for i := 0; i < n; i++ {
 		for _, key := range []Note{
 			{Author: curie.New("person:%d", i), ID: curie.New("note:%d", i)},
 			{Author: curie.New("person:%d", i), ID: curie.New("backup:%d", i)},
 		} {
-			err := db.Remove(context.TODO(), &key)
+			err := db.Remove(context.TODO(), key)
+			if err != nil {
+				fmt.Printf("=[ remove ]=> failed: %v\n", err)
+				continue
+			}
 
-			fmt.Println("=[ remove ]=> ", err)
-
+			fmt.Println("=[ remove ]=> ", key)
 		}
 	}
-}
-
-func recoverNotFound(err error) bool {
-	type notfound interface{ NotFound() string }
-
-	terr, ok := err.(notfound)
-	return ok && terr.NotFound() != ""
 }

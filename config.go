@@ -13,100 +13,103 @@
 package stream
 
 import (
-	"context"
-	"net/url"
-	"strings"
-
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/fogfish/curie"
 )
 
 /*
-
 Config options for the connection
 */
 type Config struct {
-	URI      *URL
+	Service  any
 	Prefixes curie.Prefixes
-	AWS      aws.Config
+}
+
+func NewConfig() Config {
+	return Config{
+		Prefixes: curie.Namespaces{},
+	}
 }
 
 // NewConfig creates Config with default options
-func NewConfig(opts ...Option) (*Config, error) {
-	aws, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		return nil, err
-	}
+// func NewConfig(opts ...Option) (*Config, error) {
+// 	aws, err := config.LoadDefaultConfig(context.Background())
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	cfg := &Config{
-		Prefixes: curie.Namespaces{},
-		AWS:      aws,
-	}
+// 	cfg := &Config{
+// 		Prefixes: curie.Namespaces{},
+// 		AWS:      aws,
+// 	}
 
-	for _, opt := range opts {
-		if err := opt(cfg); err != nil {
-			return nil, err
-		}
-	}
+// 	for _, opt := range opts {
+// 		if err := opt(cfg); err != nil {
+// 			return nil, err
+// 		}
+// 	}
 
-	return cfg, nil
-}
+// 	return cfg, nil
+// }
 
 // Option type to configure the connection
-type Option func(cfg *Config) error
+type Option func(cfg *Config)
 
 // WithURI defines destination URI
-func WithURI(uri string) Option {
-	return func(cfg *Config) (err error) {
-		uri, err := url.Parse(uri)
-		if err != nil {
-			return
-		}
+// func WithURI(uri string) Option {
+// 	return func(cfg *Config) (err error) {
+// 		uri, err := url.Parse(uri)
+// 		if err != nil {
+// 			return
+// 		}
 
-		cfg.URI = (*URL)(uri)
-		return
+// 		cfg.URI = (*URL)(uri)
+// 		return
+// 	}
+// }
+
+// Configure AWS Service for broker instance
+func WithService(service any) Option {
+	return func(conf *Config) {
+		conf.Service = service
 	}
 }
 
 // WithPrefixes defines prefixes for CURIEs
 func WithPrefixes(prefixes curie.Prefixes) Option {
-	return func(cfg *Config) (err error) {
-		cfg.Prefixes = prefixes
-		return
+	return func(conf *Config) {
+		conf.Prefixes = prefixes
 	}
 }
 
 // WithSession defines AWS I/O Session to be used in the context
-func WithAwsConfig(aws aws.Config) Option {
-	return func(cfg *Config) (err error) {
-		cfg.AWS = aws
-		return
-	}
-}
+// func WithAwsConfig(aws aws.Config) Option {
+// 	return func(cfg *Config) (err error) {
+// 		cfg.AWS = aws
+// 		return
+// 	}
+// }
 
 /*
-
 URL custom type with helper functions
 */
-type URL url.URL
+// type URL url.URL
 
-func (uri *URL) String() string {
-	return (*url.URL)(uri).String()
-}
+// func (uri *URL) String() string {
+// 	return (*url.URL)(uri).String()
+// }
 
-// query parameters
-func (uri *URL) Query(key, def string) string {
-	val := (*url.URL)(uri).Query().Get(key)
+// // query parameters
+// func (uri *URL) Query(key, def string) string {
+// 	val := (*url.URL)(uri).Query().Get(key)
 
-	if val == "" {
-		return def
-	}
+// 	if val == "" {
+// 		return def
+// 	}
 
-	return val
-}
+// 	return val
+// }
 
-// path segments of length
-func (uri *URL) Segments() []string {
-	return strings.Split((*url.URL)(uri).Path, "/")[1:]
-}
+// // path segments of length
+// func (uri *URL) Segments() []string {
+// 	return strings.Split((*url.URL)(uri).Path, "/")[1:]
+// }

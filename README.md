@@ -1,18 +1,19 @@
 # stream
 
-The library implements a simple streaming abstraction to store binary data and associated metadata at AWS storage services: AWS S3.
+The library implements a simple streaming abstraction to store linked-data, binary objects and its associated metadata at AWS storage services. The library support AWS S3, AWS S3 PreSigned URLs.
 
 
 ## Inspiration
 
-The library encourages developers to use Golang `io.ReadCloser` to abstract binary data and struct to define metadata. The library uses generic programming style to implement actual storage I/O, while expose metadata object as `[T stream.Thing]` with implicit conversion back and forth between a concrete struct(s). The library uses [AWS Golang SDK](https://aws.amazon.com/sdk-for-go/) under the hood.
+The library encourages developers to use Golang type system to define domain models, write correct, maintainable code. This paradigm is also extended on operating with binary objects (e.g. images, videos, etc). Using this library, the application can abstract binary objects using streams (`io.Reader`) for the content and Golang structs for objects metadata.  The library uses generic programming style to implement actual storage I/O, while expose metadata object as `[T stream.Thing]` with implicit conversion back and forth between a concrete struct(s). The library uses [AWS Golang SDK v2](https://github.com/aws/aws-sdk-go-v2) under the hood.
 
 Essentially, the library implement a following generic key-value trait to access domain objects. 
 
 ```go
-type Stream[T stream.Thing] interface {
-  Put(T, io.ReadCloser) error
-  Get(T) (*T, io.ReadCloser, error)
+type Streamer[T stream.Thing] interface {
+  Put(T, io.Reader) error
+  Get(T) (T, io.Reader, error)
+  Has(T) (T, error)
   Remove(T) error
   Match(T) Seq[T]
 }
@@ -24,33 +25,31 @@ The library requires Go **1.18** or later due to usage of [generics](https://go.
 
 The latest version of the library is available at its `main` branch. All development, including new features and bug fixes, take place on the `main` branch using forking and pull requests as described in contribution guidelines. The stable version is available via Golang modules.
 
-1. Use `go get` to retrieve the library and add it as dependency to your application.
+Use `go get` to retrieve the library and add it as dependency to your application.
 
 ```bash
 go get -u github.com/fogfish/stream
 ```
 
-2. Import required package in your code
-
-```go
-import (
-  "github.com/fogfish/stream"
-  "github.com/fogfish/stream/creek"
-)
-```
+- [Getting Started](#getting-started)
+  - [Data types definition](#data-types-definition)
+  - [Stream I/O](#stream-io)
+  - [Working with streams metadata](#working-with-streams-metadata)
+  - [Error Handling](#error-handling)
+  - [Streaming presigned url](#streaming-presigned-url)
 
 ### Data types definition
 
-Data types definition is an essential part of development with `stream` library. Golang structs declares metadata of your binary streams. Public fields are serialized into S3 metadata attributes, the field tag `metadata` controls marshal/unmarshal process. 
+Data types definition is an essential part of development with `stream` library. Golang structs declares metadata of your binary objects. Public fields are serialized into S3 metadata attributes, the field tag `metadata` controls marshal/unmarshal process. 
 
 The library demands from each structure implementation of `Thing` interface. This type acts as struct annotation -- Golang compiler raises an error at compile time if other data type is supplied for Stream I/O. Secondly, each structure defines unique "composite primary key". The library encourages definition of both partition and sort keys, which facilitates linked-data, hierarchical structures and cheap relations between data elements.
 
 ```go
-import "github.com/fogfish/stream"
-
 type Note struct {
-	Author string `metadata:"Author"`
-	ID     string `metadata:"Id"`
+	Author          string    `metadata:"Author"`
+	ID              string    `metadata:"Id"`
+  ContentType     string    `metadata:"Content-Type"`
+	ContentLanguage string    `metadata:"Content-Language"`
 }
 
 //
@@ -61,15 +60,21 @@ func (n Note) SortKey() string { return n.ID }
 //
 // this data type is a normal Golang struct
 // just create an instance, fill required fields
+// The struct define the path to the object on the bucket as
+// composition of Has & Sort keys together with object's metadata
 var note := Note{
-  Author:  "haskell",
-  ID:      "8980789222",
+  Author:          "haskell",
+  ID:              "8980789222",
+  ContentType:     "text/plain",
+  ContentLanguage: "en",
 }
 ```
 
+This is it! Your application is ready to stream data to/form AWS S3 Buckets.
+
 ### Stream I/O
 
-Please [see and try examples](examples). Its cover all basic use-cases with runnable code snippets.
+Please [see and try examples](./examples/). Its cover all basic use-cases with runnable code snippets.
 
 ```bash
 go run examples/stream/stream.go s3:///my-bucket
@@ -80,25 +85,25 @@ The following code snippet shows a typical I/O patterns
 ```go
 import (
   "github.com/fogfish/stream"
-  "github.com/fogfish/stream/creek"
+  "github.com/fogfish/stream/service/s3"
 )
 
 //
 // Create client and bind it with the bucket
 // Use URI notation to specify the diver (s3://) and the bucket (/my-bucket) 
-db := creek.Must(creek.New[Note]("s3:///my-bucket"))
+db, err := s3.New[Note]("my-bucket")
 
 //
 // Write the stream with Put
 stream := io.NopCloser(strings.NewReader("..."))
-if err := db.Put(note, stream); err != nil {
+if err := db.Put(context.TODO(), note, stream); err != nil {
 }
 
 //
 // Lookup the stream using Get. This function takes input structure as key
 // and return a new copy upon the completion. The only requirement - ID has to
 // be defined.
-note, stream, err := db.Get(
+note, stream, err := db.Get(context.TODO(),
   Note{
     Author:  "haskell",
     ID:      "8980789222",
@@ -159,6 +164,67 @@ type ErrorCode interface{ ErrorCode() string }
 type NotFound interface { NotFound() string }
 ```
 
+### Streaming presigned url
+
+Usage of `io.Reader` interface is sufficient for majority cloud applications. However, sometime is required to delegate read/write responsibility to mobile client. For example, uploading images or video files from mobile client to S3 bucket directly is scalable and way more efficient than doing this thought backend system. The library supports a special case for streaming binary objects using pre-signed urls, where `Put` & `Get` methods returns pre-signed URL instead of actual stream: 
+
+```go
+type Streamer[T stream.Thing] interface {
+  Put(T) (string, error)
+  Get(T) (string, error)
+  Has(T) (T, error)
+  Remove(T) error
+  Match(T) Seq[T]
+}
+```
+
+Write object using the library:
+
+```go
+import (
+  "github.com/fogfish/stream"
+  "github.com/fogfish/stream/service/s3url"
+)
+
+db, err := s3url.New[Note]("my-bucket")
+
+url, err := db.Put(context.TODO(),
+  Note{
+    Author:          "haskell",
+    ID:              "8980789222",
+    ContentType:     "text/plain",
+    ContentLanguage: "en",
+  },
+  5*time.Minute
+)
+```
+
+Note: the usage of pre-signed url requires passing of all headers that has been passed to `Put` function
+
+```bash
+curl -XPUT https://pre-signed-url-goes-here \
+  -H 'Content-Type: text/plain' \
+  -H 'Content-Language: en' \
+  -H 'X-Amz-Meta-Author: haskell' \
+  -H 'X-Amz-Meta-Id: 8980789222' \
+  -d 'some content'
+```
+
+Read object using the library:
+
+```go
+url, err := db.Get(context.TODO(),
+  Note{
+    Author:          "haskell",
+    ID:              "8980789222",
+  },
+  5*time.Minute
+)
+```
+
+```bash
+curl -XGET https://pre-signed-url-goes-here
+```
 
 ## How To Contribute
 
