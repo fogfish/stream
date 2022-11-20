@@ -100,7 +100,6 @@ type StreamReader[T Thing] interface {
 // StreamWriter defines a generic key-value writer
 type StreamWriter[T Thing] interface {
 	Put(context.Context, T, io.ReadCloser) error
-	Copy(context.Context, T, T) error
 	Remove(context.Context, T) error
 }
 
