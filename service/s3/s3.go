@@ -3,6 +3,7 @@ package s3
 import (
 	"context"
 	"io"
+	"net/url"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -20,11 +21,19 @@ type Storage[T stream.Thing] struct {
 	codec  codec.Codec[T]
 }
 
-func New[T stream.Thing](bucket string, opts ...stream.Option) (*Storage[T], error) {
+func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], error) {
 	conf := stream.NewConfig()
 	for _, opt := range opts {
 		opt(&conf)
 	}
+
+	uri, err := newURI(connector)
+	if err != nil || len(uri.Path) < 2 {
+		return nil, errInvalidConnectorURL(connector)
+	}
+
+	seq := uri.Segments()
+	bucket := seq[0]
 
 	client, err := newClient(bucket, &conf)
 	if err != nil {
@@ -57,6 +66,15 @@ func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
 	}
 
 	return s3.NewFromConfig(aws), nil
+}
+
+func newURI(uri string) (*stream.URL, error) {
+	spec, err := url.Parse(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*stream.URL)(spec), nil
 }
 
 // Put
