@@ -8,6 +8,16 @@ import (
 	"github.com/fogfish/stream"
 )
 
+func errInvalidConnectorURL(url string) error {
+	var name string
+
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		name = runtime.FuncForPC(pc).Name()
+	}
+
+	return fmt.Errorf("[stream.s3.%s] invalid connector url: %s", name, url)
+}
+
 func errServiceIO(err error) error {
 	var name string
 
