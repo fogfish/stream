@@ -19,45 +19,6 @@ type Thing interface {
 
 //-----------------------------------------------------------------------------
 //
-// Storage Lazy Sequence
-//
-//-----------------------------------------------------------------------------
-
-// SeqLazy is an interface to iterate through collection of objects at storage
-type SeqLazy[T Thing] interface {
-	// Head lifts first element of sequence
-	Head() (T, io.ReadCloser, error)
-	// Tail evaluates tail of sequence
-	Tail() bool
-	// Error returns error of stream evaluation
-	Error() error
-	// Cursor is the global position in the sequence
-	Cursor() Thing
-}
-
-// SeqConfig configures optional sequence behavior
-type SeqConfig[T Thing] interface {
-	// Limit sequence size to N elements (pagination)
-	Limit(int64) Seq[T]
-	// Continue limited sequence from the cursor
-	Continue(Thing) Seq[T]
-	// Reverse order of sequence
-	Reverse() Seq[T]
-}
-
-// Seq is an interface to transform collection of objects
-//
-//	db.Match(...).FMap(func(key Thing, val io.ReadCloser) error { ... })
-type Seq[T Thing] interface {
-	SeqLazy[T]
-	SeqConfig[T]
-
-	// Sequence transformer
-	FMap(func(T, io.ReadCloser) error) error
-}
-
-//-----------------------------------------------------------------------------
-//
 // Stream Reader
 //
 //-----------------------------------------------------------------------------
@@ -76,8 +37,20 @@ type StreamGetter[T Thing] interface {
 
 // StreamPattern defines simple pattern matching lookup I/O
 type StreamPattern[T Thing] interface {
-	Match(context.Context, T) Seq[T]
+	Match(context.Context, T, ...interface{ MatchOpt() }) ([]T, error)
 }
+
+// Limit option for Match
+type Limit int32
+
+func (Limit) MatchOpt() {}
+
+// Cursor option for Match
+func Cursor(c Thing) interface{ MatchOpt() } { return cursor{c} }
+
+type cursor struct{ Thing }
+
+func (cursor) MatchOpt() {}
 
 //-----------------------------------------------------------------------------
 //
@@ -99,7 +72,7 @@ type StreamReader[T Thing] interface {
 
 // StreamWriter defines a generic key-value writer
 type StreamWriter[T Thing] interface {
-	Put(context.Context, T, io.ReadCloser) error
+	Put(context.Context, T, io.Reader) error
 	Remove(context.Context, T) error
 }
 

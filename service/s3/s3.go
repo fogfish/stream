@@ -29,7 +29,7 @@ func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], 
 
 	uri, err := newURI(connector)
 	if err != nil || len(uri.Path) < 2 {
-		return nil, errInvalidConnectorURL(connector)
+		return nil, errInvalidConnectorURL.New(nil, connector)
 	}
 
 	seq := uri.Segments()
@@ -78,14 +78,14 @@ func newURI(uri string) (*stream.URL, error) {
 }
 
 // Put
-func (db *Storage[T]) Put(ctx context.Context, entity T, val io.ReadCloser) error {
+func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader) error {
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 	req.Body = val
 
 	_, err := db.upload.Upload(ctx, req)
 	if err != nil {
-		return errServiceIO(err)
+		return errServiceIO.New(err)
 	}
 	return nil
 }
@@ -99,7 +99,7 @@ func (db *Storage[T]) Remove(ctx context.Context, key T) error {
 
 	_, err := db.client.DeleteObject(ctx, req)
 	if err != nil {
-		return errServiceIO(err)
+		return errServiceIO.New(err)
 	}
 
 	return nil
@@ -107,17 +107,21 @@ func (db *Storage[T]) Remove(ctx context.Context, key T) error {
 
 // Has
 func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
+	return db.has(ctx, db.codec.EncodeKey(key))
+}
+
+func (db *Storage[T]) has(ctx context.Context, key string) (T, error) {
 	req := &s3.HeadObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
 	val, err := db.client.HeadObject(ctx, req)
 	if err != nil {
 		switch {
 		case recoverNotFound(err):
-			return db.codec.Undefined, errNotFound(err, db.codec.EncodeKey(key))
+			return db.codec.Undefined, errNotFound(err, key)
 		default:
-			return db.codec.Undefined, errServiceIO(err)
+			return db.codec.Undefined, errServiceIO.New(err)
 		}
 	}
 
@@ -141,7 +145,7 @@ func (db *Storage[T]) get(ctx context.Context, key string) (T, io.ReadCloser, er
 		case recoverNoSuchKey(err):
 			return db.codec.Undefined, nil, errNotFound(err, key)
 		default:
-			return db.codec.Undefined, nil, errServiceIO(err)
+			return db.codec.Undefined, nil, errServiceIO.New(err)
 		}
 	}
 
@@ -150,14 +154,46 @@ func (db *Storage[T]) get(ctx context.Context, key string) (T, io.ReadCloser, er
 }
 
 // Match
-func (db *Storage[T]) Match(ctx context.Context, key T) *Seq[T] {
-	req := &s3.ListObjectsV2Input{
-		Bucket:  aws.String(db.bucket),
-		MaxKeys: int32(1000),
-		Prefix:  aws.String(db.codec.EncodeKey(key)),
+func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ MatchOpt() }) ([]T, error) {
+	req := db.reqListObjects(key, opts...)
+	val, err := db.client.ListObjectsV2(context.Background(), req)
+	if err != nil {
+		return nil, errServiceIO.New(err)
 	}
 
-	return newSeq(db, req)
+	seq := make([]T, val.KeyCount)
+	for i := 0; i < int(val.KeyCount); i++ {
+		key := *val.Contents[i].Key
+
+		seq[i], err = db.has(ctx, key)
+		if err != nil {
+			return nil, errServiceIO.New(err)
+		}
+	}
+
+	return seq, nil
+}
+
+func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3.ListObjectsV2Input {
+	var (
+		limit  int32   = 1000
+		cursor *string = nil
+	)
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case stream.Limit:
+			limit = int32(v)
+		case stream.Thing:
+			cursor = aws.String(db.codec.EncodeKey(v))
+		}
+	}
+
+	return &s3.ListObjectsV2Input{
+		Bucket:     aws.String(db.bucket),
+		MaxKeys:    limit,
+		Prefix:     aws.String(db.codec.EncodeKey(key)),
+		StartAfter: cursor,
+	}
 }
 
 // With

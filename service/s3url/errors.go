@@ -1,40 +1,18 @@
 package s3url
 
 import (
+	// "errors"
+
 	"errors"
 	"fmt"
-	"runtime"
+
+	xerrors "github.com/fogfish/errors"
 )
 
-func errInvalidConnectorURL(url string) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3url.%s] invalid connector url: %s", name, url)
-}
-
-func errServiceIO(err error) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3url.%s] service i/o failed: %w", name, err)
-}
-
-func errProcessURL(err error, url string) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3url.%s] can't process %s : %w", name, url, err)
-}
+const (
+	errInvalidConnectorURL = xerrors.Safe1[string]("invalid connector url %s")
+	errServiceIO           = xerrors.Type("service i/o failed")
+)
 
 // NotFound is an error to handle unknown elements
 func errNotFound(err error, key string) error {
@@ -54,6 +32,7 @@ func (e *notFound) Unwrap() error { return e.err }
 
 func (e *notFound) NotFound() string { return e.key }
 
+// recover from AWS SDK Not Found error
 func recoverNotFound(err error) bool {
 	var e interface{ ErrorCode() string }
 

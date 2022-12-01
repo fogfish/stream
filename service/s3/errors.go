@@ -5,28 +5,14 @@ import (
 	"fmt"
 	"runtime"
 
+	xerrors "github.com/fogfish/errors"
 	"github.com/fogfish/stream"
 )
 
-func errInvalidConnectorURL(url string) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] invalid connector url: %s", name, url)
-}
-
-func errServiceIO(err error) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", name, err)
-}
+const (
+	errInvalidConnectorURL = xerrors.Safe1[string]("invalid connector url %s")
+	errServiceIO           = xerrors.Type("service i/o failed")
+)
 
 func errProcessEntity(err error, thing stream.Thing) error {
 	var name string
