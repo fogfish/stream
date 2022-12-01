@@ -159,18 +159,18 @@ func exampleMatch(db Storage) {
 	http := http.New()
 
 	key := Note{Author: curie.New("person:")}
-	err := db.Match(context.Background(), key, 1*time.Minute).
-		FMap(func(key string, uri string) error {
-			note, err := exampleGetByURL(http, uri)
-			if err != nil {
-				return err
-			}
-
-			fmt.Printf("=[ match ]=> %+v\n", note)
-			return nil
-		})
+	seq, err := db.Match(context.Background(), key, 1*time.Minute)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
+	}
+
+	for _, url := range seq {
+		note, err := exampleGetByURL(http, url)
+		if err != nil {
+			return
+		}
+
+		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 }
 
@@ -186,8 +186,13 @@ func exampleCopy(db Storage) {
 			ID:     curie.New("backup:%d", i),
 		}
 
-		err := db.With(note).CopyTo(backup).Wait(1 * time.Minute)
+		fd, err := db.With(note).CopyTo(context.TODO(), backup)
 		if err != nil {
+			fmt.Printf("=[ copy ]=> failed: %v\n", err)
+			continue
+		}
+
+		if err := fd.Wait(context.TODO(), 1*time.Minute); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}

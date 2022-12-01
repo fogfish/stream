@@ -12,7 +12,6 @@ import (
 type Object[T stream.Thing] struct {
 	storage *Storage[T]
 	entity  T
-	err     error
 }
 
 func newObject[T stream.Thing](storage *Storage[T], entity T) Object[T] {
@@ -22,13 +21,8 @@ func newObject[T stream.Thing](storage *Storage[T], entity T) Object[T] {
 	}
 }
 
-func (obj Object[T]) Wait(timeout time.Duration) error {
-	if obj.err != nil {
-		return errServiceIO(obj.err)
-	}
-
-	err := obj.storage.waiter.Wait(
-		context.Background(),
+func (obj Object[T]) Wait(ctx context.Context, timeout time.Duration) error {
+	err := obj.storage.waiter.Wait(ctx,
 		&s3.HeadObjectInput{
 			Bucket: aws.String(obj.storage.bucket),
 			Key:    aws.String(obj.storage.codec.EncodeKey(obj.entity)),
@@ -36,25 +30,26 @@ func (obj Object[T]) Wait(timeout time.Duration) error {
 		timeout,
 	)
 	if err != nil {
-		return errServiceIO(err)
+		return errServiceIO.New(err)
 	}
 
 	return nil
 }
 
-func (obj Object[T]) CopyTo(target T) Object[T] {
-	_, err := obj.storage.client.CopyObject(
-		context.Background(),
+func (obj Object[T]) CopyTo(ctx context.Context, target T) (Object[T], error) {
+	_, err := obj.storage.client.CopyObject(ctx,
 		&s3.CopyObjectInput{
 			Bucket:     aws.String(obj.storage.bucket),
 			Key:        aws.String(obj.storage.codec.EncodeKey(target)),
 			CopySource: aws.String(obj.storage.bucket + "/" + obj.storage.codec.EncodeKey(obj.entity)),
 		},
 	)
+	if err != nil {
+		return Object[T]{}, errServiceIO.New(err)
+	}
 
 	return Object[T]{
 		storage: obj.storage,
 		entity:  target,
-		err:     err,
-	}
+	}, nil
 }

@@ -3,40 +3,14 @@ package s3
 import (
 	"errors"
 	"fmt"
-	"runtime"
 
-	"github.com/fogfish/stream"
+	xerrors "github.com/fogfish/errors"
 )
 
-func errInvalidConnectorURL(url string) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] invalid connector url: %s", name, url)
-}
-
-func errServiceIO(err error) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] service i/o failed: %w", name, err)
-}
-
-func errProcessEntity(err error, thing stream.Thing) error {
-	var name string
-
-	if pc, _, _, ok := runtime.Caller(1); ok {
-		name = runtime.FuncForPC(pc).Name()
-	}
-
-	return fmt.Errorf("[stream.s3.%s] can't process (%s, %s) : %w", name, thing.HashKey(), thing.SortKey(), err)
-}
+const (
+	errInvalidConnectorURL = xerrors.Safe1[string]("invalid connector url %s")
+	errServiceIO           = xerrors.Type("service i/o failed")
+)
 
 // NotFound is an error to handle unknown elements
 func errNotFound(err error, key string) error {

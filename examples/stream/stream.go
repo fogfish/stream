@@ -115,16 +115,26 @@ func exampleHas(db Storage) {
 
 func exampleMatch(db Storage) {
 	key := Note{Author: curie.New("person:")}
-	err := db.Match(context.Background(), key).
-		FMap(func(note Note, sin io.ReadCloser) error {
-			defer sin.Close()
-			data, _ := io.ReadAll(sin)
-			fmt.Printf("=[ match ]=> %+v %s\n", note, data)
-			return nil
-		})
+	seq, err := db.Match(context.Background(), key, stream.Limit(2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
+		return
 	}
+
+	for _, note := range seq {
+		fmt.Printf("=[ match ]=> %+v\n", note)
+	}
+
+	seq, err = db.Match(context.Background(), key, stream.Cursor(seq[1]))
+	if err != nil {
+		fmt.Printf("=[ match ]=> failed: %v\n", err)
+		return
+	}
+
+	for _, note := range seq {
+		fmt.Printf("=[ match ]=> %+v\n", note)
+	}
+
 }
 
 func exampleCopy(db Storage) {
@@ -139,8 +149,13 @@ func exampleCopy(db Storage) {
 			ID:     curie.New("backup:%d", i),
 		}
 
-		err := db.With(note).CopyTo(backup).Wait(1 * time.Minute)
+		fd, err := db.With(note).CopyTo(context.TODO(), backup)
 		if err != nil {
+			fmt.Printf("=[ copy ]=> failed: %v\n", err)
+			continue
+		}
+
+		if err := fd.Wait(context.TODO(), 1*time.Minute); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}
