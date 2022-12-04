@@ -149,13 +149,12 @@ func exampleCopy(db Storage) {
 			ID:     curie.New("backup:%d", i),
 		}
 
-		fd, err := db.With(note).CopyTo(context.TODO(), backup)
-		if err != nil {
+		if err := db.Copy(context.TODO(), note, backup); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}
 
-		if err := fd.Wait(context.TODO(), 1*time.Minute); err != nil {
+		if err := db.Wait(context.TODO(), backup, 1*time.Minute); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}

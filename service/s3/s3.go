@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -196,7 +197,32 @@ func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3
 	}
 }
 
-// With
-func (db *Storage[T]) With(entity T) Object[T] {
-	return newObject(db, entity)
+func (db *Storage[T]) Wait(ctx context.Context, key T, timeout time.Duration) error {
+	err := db.waiter.Wait(ctx,
+		&s3.HeadObjectInput{
+			Bucket: aws.String(db.bucket),
+			Key:    aws.String(db.codec.EncodeKey(key)),
+		},
+		timeout,
+	)
+	if err != nil {
+		return errServiceIO.New(err)
+	}
+
+	return nil
+}
+
+func (db *Storage[T]) Copy(ctx context.Context, source T, target T) error {
+	_, err := db.client.CopyObject(ctx,
+		&s3.CopyObjectInput{
+			Bucket:     aws.String(db.bucket),
+			Key:        aws.String(db.codec.EncodeKey(target)),
+			CopySource: aws.String(db.bucket + "/" + db.codec.EncodeKey(source)),
+		},
+	)
+	if err != nil {
+		return errServiceIO.New(err)
+	}
+
+	return nil
 }
