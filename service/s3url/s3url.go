@@ -108,23 +108,18 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (
 }
 
 // Remove
-func (db *Storage[T]) Remove(ctx context.Context, key T) (T, error) {
-	obj, err := db.Has(ctx, key)
-	if err != nil {
-		return db.codec.Undefined, err
-	}
-
+func (db *Storage[T]) Remove(ctx context.Context, key T) error {
 	req := &s3.DeleteObjectInput{
 		Bucket: aws.String(db.bucket),
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
 
-	_, err = db.client.DeleteObject(ctx, req)
+	_, err := db.client.DeleteObject(ctx, req)
 	if err != nil {
-		return db.codec.Undefined, errServiceIO.New(err)
+		return errServiceIO.New(err)
 	}
 
-	return obj, nil
+	return nil
 }
 
 // Has
