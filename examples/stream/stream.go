@@ -169,13 +169,13 @@ func exampleRemove(db Storage) {
 			{Author: curie.New("person:%d", i), ID: curie.New("note:%d", i)},
 			{Author: curie.New("person:%d", i), ID: curie.New("backup:%d", i)},
 		} {
-			err := db.Remove(context.TODO(), key)
+			val, err := db.Remove(context.TODO(), key)
 			if err != nil {
 				fmt.Printf("=[ remove ]=> failed: %v\n", err)
 				continue
 			}
 
-			fmt.Println("=[ remove ]=> ", key)
+			fmt.Println("=[ remove ]=> ", val)
 		}
 	}
 }
