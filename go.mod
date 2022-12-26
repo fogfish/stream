@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.11
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.16
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.26.11
-	github.com/fogfish/curie v1.7.1
+	github.com/fogfish/curie v1.8.2
 	github.com/fogfish/errors v0.1.0
 	github.com/fogfish/golem v0.8.5
 	github.com/fogfish/gurl v1.2.0
