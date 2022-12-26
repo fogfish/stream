@@ -54,8 +54,8 @@ func fixtureGetObject() *a3.GetObjectOutput {
 		Expires:         &fixtureTime,
 		LastModified:    &fixtureTime,
 		Metadata: map[string]string{
-			"Author":    "haskell",
-			"Id":        "8980789222",
+			"Author":    "[haskell]",
+			"Id":        "[8980789222]",
 			"Custom":    "Custom",
 			"Attribute": "Attribute",
 		},
@@ -71,8 +71,8 @@ func fixtureHasObject() *a3.HeadObjectOutput {
 		Expires:         &fixtureTime,
 		LastModified:    &fixtureTime,
 		Metadata: map[string]string{
-			"Author":    "haskell",
-			"Id":        "8980789222",
+			"Author":    "[haskell]",
+			"Id":        "[8980789222]",
 			"Custom":    "Custom",
 			"Attribute": "Attribute",
 		},
@@ -89,8 +89,8 @@ func TestEncode(t *testing.T) {
 		If(*val.ContentLanguage).Equal("Content-Language").
 		If(*val.ContentType).Equal("Content-Type").
 		If(*val.Expires).Equal(fixtureTime).
-		If(val.Metadata["Author"]).Equal("haskell").
-		If(val.Metadata["Id"]).Equal("8980789222").
+		If(val.Metadata["Author"]).Equal("[haskell]").
+		If(val.Metadata["Id"]).Equal("[8980789222]").
 		If(val.Metadata["Custom"]).Equal("Custom").
 		If(val.Metadata["Attribute"]).Equal("Attribute")
 }
