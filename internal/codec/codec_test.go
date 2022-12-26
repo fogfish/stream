@@ -13,10 +13,11 @@ import (
 
 type Note struct {
 	// User-defined metadata
-	Author    curie.IRI `metadata:"Author"`
-	ID        curie.IRI `metadata:"Id"`
-	Custom    string    `metadata:"Custom"`
-	Attribute *string   `metadata:"Attribute"`
+	Author    curie.IRI  `metadata:"Author"`
+	ID        curie.IRI  `metadata:"Id"`
+	IRI       *curie.IRI `metadata:"IRI"`
+	Custom    string     `metadata:"Custom"`
+	Attribute *string    `metadata:"Attribute"`
 	// System metadata
 	CacheControl    string     `metadata:"Cache-Control"`
 	ContentEncoding string     `metadata:"Content-Encoding"`
@@ -35,6 +36,7 @@ func fixtureNote() Note {
 	return Note{
 		Author:          "haskell",
 		ID:              "8980789222",
+		IRI:             (*curie.IRI)(aws.String("wiki:curie")),
 		CacheControl:    "Cache-Control",
 		ContentEncoding: "Content-Encoding",
 		ContentLanguage: aws.String("Content-Language"),
@@ -56,6 +58,7 @@ func fixtureGetObject() *a3.GetObjectOutput {
 		Metadata: map[string]string{
 			"Author":    "[haskell]",
 			"Id":        "[8980789222]",
+			"IRI":       "[wiki:curie]",
 			"Custom":    "Custom",
 			"Attribute": "Attribute",
 		},
@@ -73,6 +76,7 @@ func fixtureHasObject() *a3.HeadObjectOutput {
 		Metadata: map[string]string{
 			"Author":    "[haskell]",
 			"Id":        "[8980789222]",
+			"IRI":       "[wiki:curie]",
 			"Custom":    "Custom",
 			"Attribute": "Attribute",
 		},
@@ -91,6 +95,7 @@ func TestEncode(t *testing.T) {
 		If(*val.Expires).Equal(fixtureTime).
 		If(val.Metadata["Author"]).Equal("[haskell]").
 		If(val.Metadata["Id"]).Equal("[8980789222]").
+		If(val.Metadata["IRI"]).Equal("[wiki:curie]").
 		If(val.Metadata["Custom"]).Equal("Custom").
 		If(val.Metadata["Attribute"]).Equal("Attribute")
 }
@@ -108,6 +113,7 @@ func TestDecodeWithGetObject(t *testing.T) {
 		If(*val.LastModified).Equal(fixtureTime).
 		If(val.Author).Equal(curie.IRI("haskell")).
 		If(val.ID).Equal(curie.IRI("8980789222")).
+		If(*val.IRI).Equal(curie.IRI("wiki:curie")).
 		If(val.Custom).Equal("Custom").
 		If(*val.Attribute).Equal("Attribute")
 }
@@ -125,6 +131,7 @@ func TestDecodeWithHasObject(t *testing.T) {
 		If(*val.LastModified).Equal(fixtureTime).
 		If(val.Author).Equal(curie.IRI("haskell")).
 		If(val.ID).Equal(curie.IRI("8980789222")).
+		If(*val.IRI).Equal(curie.IRI("wiki:curie")).
 		If(val.Custom).Equal("Custom").
 		If(*val.Attribute).Equal("Attribute")
 }

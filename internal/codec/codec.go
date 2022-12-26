@@ -280,14 +280,19 @@ func (codec Codec[T]) encodeValueOfString(field reflect.Value) *string {
 }
 
 func (codec Codec[T]) decodeValueOfString(field reflect.Value, val *string) {
-	if val != nil && strings.HasSuffix(field.Type().Name(), "IRI") {
-		iri := string(curie.New(*val))
+	pureType := field.Type()
+	if field.Kind() == reflect.Pointer {
+		pureType = pureType.Elem()
+	}
+
+	if val != nil && strings.HasSuffix(pureType.Name(), "IRI") {
+		iri := curie.New(*val)
 		if field.Kind() == reflect.Pointer {
 			field.Set(reflect.ValueOf(&iri))
 			return
 		}
 
-		field.SetString(iri)
+		field.SetString(string(iri))
 		return
 	}
 
