@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/fogfish/curie"
-	"github.com/fogfish/gurl/http"
-	ƒ "github.com/fogfish/gurl/http/recv"
-	ø "github.com/fogfish/gurl/http/send"
+	"github.com/fogfish/gurl/v2/http"
+	ƒ "github.com/fogfish/gurl/v2/http/recv"
+	ø "github.com/fogfish/gurl/v2/http/send"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/service/s3url"
 )
@@ -65,13 +65,13 @@ func examplePut(db Storage) {
 
 		uri, err := db.Put(context.Background(), note, 1*time.Minute)
 		if err != nil {
-			fmt.Printf("=[ put ]=> failed: %s", err)
+			fmt.Printf("=[ put ]=> failed: %s\n", err)
 			continue
 		}
 
 		err = examplePutByURL(http, uri, note)
 		if err != nil {
-			fmt.Printf("=[ put ]=> failed: %s", err)
+			fmt.Printf("=[ put ]=> failed: %s\n", err)
 			continue
 		}
 
@@ -79,16 +79,18 @@ func examplePut(db Storage) {
 	}
 }
 
-func examplePutByURL(http http.Stack, uri string, note Note) error {
-	return http.IO(context.Background(),
-		ø.PUT.URI(uri),
-		ø.ContentType.Text,
-		ø.Header("X-Amz-Meta-Author").Is(string(note.Author)),
-		ø.Header("X-Amz-Meta-Id").Is(string(note.ID)),
-		ø.Header("Content-Language").Is(note.ContentLanguage),
-		ø.Send(note.Content),
+func examplePutByURL(stack http.Stack, uri string, note Note) error {
+	return stack.IO(context.Background(),
+		http.PUT(
+			ø.URI(uri),
+			ø.ContentType.Text,
+			ø.Header("X-Amz-Meta-Author", note.Author.Safe()),
+			ø.Header("X-Amz-Meta-Id", note.ID.Safe()),
+			ø.Header("Content-Language", note.ContentLanguage),
+			ø.Send(note.Content),
 
-		ƒ.Status.OK,
+			ƒ.Status.OK,
+		),
 	)
 }
 
@@ -117,21 +119,23 @@ func exampleGet(db Storage) {
 	}
 }
 
-func exampleGetByURL(http http.Stack, uri string) (Note, error) {
+func exampleGetByURL(stack http.Stack, uri string) (Note, error) {
 	var (
 		note Note
 		data []byte
 	)
-	err := http.IO(context.Background(),
-		ø.GET.URI(uri),
-		ø.Accept.TextPlain,
+	err := stack.IO(context.Background(),
+		http.GET(
+			ø.URI(uri),
+			ø.Accept.TextPlain,
 
-		ƒ.Status.OK,
-		ƒ.Header("X-Amz-Meta-Author").To((*string)(&note.Author)),
-		ƒ.Header("X-Amz-Meta-Id").To((*string)(&note.ID)),
-		ƒ.Header("Content-Type").To(&note.ContentType),
-		ƒ.Header("Content-Language").To(&note.ContentLanguage),
-		ƒ.Bytes(&data),
+			ƒ.Status.OK,
+			ƒ.Header("X-Amz-Meta-Author", (*string)(&note.Author)),
+			ƒ.Header("X-Amz-Meta-Id", (*string)(&note.ID)),
+			ƒ.Header("Content-Type", &note.ContentType),
+			ƒ.Header("Content-Language", &note.ContentLanguage),
+			ƒ.Bytes(&data),
+		),
 	)
 
 	note.Content = string(data)

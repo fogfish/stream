@@ -1,17 +1,15 @@
 package s3url
 
 import (
-	// "errors"
-
 	"errors"
 	"fmt"
 
-	xerrors "github.com/fogfish/errors"
+	"github.com/fogfish/faults"
 )
 
 const (
-	errInvalidConnectorURL = xerrors.Safe1[string]("invalid connector url %s")
-	errServiceIO           = xerrors.Type("service i/o failed")
+	errInvalidConnectorURL = faults.Safe1[string]("invalid connector url %s")
+	errServiceIO           = faults.Type("service i/o failed")
 )
 
 // NotFound is an error to handle unknown elements

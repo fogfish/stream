@@ -13,9 +13,6 @@
 package stream
 
 import (
-	"net/url"
-	"strings"
-
 	"github.com/fogfish/curie"
 )
 
@@ -27,6 +24,8 @@ type Config struct {
 	Prefixes curie.Prefixes
 }
 
+func (*Config) Config() {}
+
 // NewConfig creates Config with default options
 func NewConfig() Config {
 	return Config{
@@ -35,43 +34,24 @@ func NewConfig() Config {
 }
 
 // Option type to configure the connection
-type Option func(cfg *Config)
+type Option func(cfg interface{ Config() })
 
 // Configure AWS Service for broker instance
 func WithService(service any) Option {
-	return func(conf *Config) {
-		conf.Service = service
+	return func(conf interface{ Config() }) {
+		switch c := conf.(type) {
+		case *Config:
+			c.Service = service
+		}
 	}
 }
 
 // WithPrefixes defines prefixes for CURIEs
 func WithPrefixes(prefixes curie.Prefixes) Option {
-	return func(conf *Config) {
-		conf.Prefixes = prefixes
+	return func(conf interface{ Config() }) {
+		switch c := conf.(type) {
+		case *Config:
+			c.Prefixes = prefixes
+		}
 	}
-}
-
-/*
-URL custom type with helper functions
-*/
-type URL url.URL
-
-func (uri *URL) String() string {
-	return (*url.URL)(uri).String()
-}
-
-// query parameters
-func (uri *URL) Query(key, def string) string {
-	val := (*url.URL)(uri).Query().Get(key)
-
-	if val == "" {
-		return def
-	}
-
-	return val
-}
-
-// path segments of length
-func (uri *URL) Segments() []string {
-	return strings.Split((*url.URL)(uri).Path, "/")[1:]
 }
