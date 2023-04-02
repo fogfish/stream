@@ -3,6 +3,8 @@ package stream
 import (
 	"context"
 	"io"
+	"net/url"
+	"strings"
 
 	"github.com/fogfish/curie"
 )
@@ -41,9 +43,13 @@ type StreamPattern[T Thing] interface {
 }
 
 // Limit option for Match
-type Limit int32
+func Limit(v int32) interface{ MatchOpt() } { return limit(v) }
 
-func (Limit) MatchOpt() {}
+type limit int32
+
+func (limit) MatchOpt() {}
+
+func (limit limit) Limit() int32 { return int32(limit) }
 
 // Cursor option for Match
 func Cursor(c Thing) interface{ MatchOpt() } { return cursor{c} }
@@ -86,4 +92,33 @@ type StreamWriter[T Thing] interface {
 type Streamer[T Thing] interface {
 	StreamReader[T]
 	StreamWriter[T]
+}
+
+//-----------------------------------------------------------------------------
+//
+// Utility types
+//
+//-----------------------------------------------------------------------------
+
+// URL custom type with helper functions
+type URL url.URL
+
+func (uri *URL) String() string {
+	return (*url.URL)(uri).String()
+}
+
+// query parameters
+func (uri *URL) Query(key, def string) string {
+	val := (*url.URL)(uri).Query().Get(key)
+
+	if val == "" {
+		return def
+	}
+
+	return val
+}
+
+// path segments of length
+func (uri *URL) Segments() []string {
+	return strings.Split((*url.URL)(uri).Path, "/")[1:]
 }

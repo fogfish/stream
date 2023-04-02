@@ -182,8 +182,8 @@ func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3
 	)
 	for _, opt := range opts {
 		switch v := opt.(type) {
-		case stream.Limit:
-			limit = int32(v)
+		case interface{ Limit() int32 }:
+			limit = v.Limit()
 		case stream.Thing:
 			cursor = aws.String(db.codec.EncodeKey(v))
 		}

@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/curie"
-	"github.com/fogfish/golem/pure/hseq"
+	"github.com/fogfish/golem/hseq"
 	"github.com/fogfish/stream"
 )
 
@@ -27,7 +27,7 @@ func New[T stream.Thing](prefixes curie.Prefixes) Codec[T] {
 	}
 
 	hseq.FMap(
-		hseq.Generic[T](),
+		hseq.New[T](),
 		func(t hseq.Type[T]) error {
 			name := strings.Split(t.StructField.Tag.Get("metadata"), ",")[0]
 			if name != "" {
