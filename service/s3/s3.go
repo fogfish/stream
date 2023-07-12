@@ -65,7 +65,7 @@ func newClient(bucket string, conf *stream.OptionS3) (*s3.Client, error) {
 }
 
 // Put
-func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader, _ ...stream.WriterOpt) error {
+func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader, opts ...stream.WriterOpt) error {
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 	req.Body = val
