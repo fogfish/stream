@@ -3,13 +3,13 @@ package s3
 import (
 	"context"
 	"io"
-	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/curie"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/codec"
 )
@@ -22,21 +22,19 @@ type Storage[T stream.Thing] struct {
 	codec  codec.Codec[T]
 }
 
-func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], error) {
-	conf := stream.NewConfig()
+func New[T stream.Thing](opts ...stream.Option[stream.OptionS3]) (*Storage[T], error) {
+	conf := stream.NewOptionS3()
 	for _, opt := range opts {
-		opt(&conf)
+		opt(conf)
 	}
 
-	uri, err := newURI(connector)
-	if err != nil || len(uri.Path) < 2 {
-		return nil, errInvalidConnectorURL.New(nil, connector)
+	if conf.Bucket == "" {
+		return nil, errUndefinedBucket.New(nil)
 	}
 
-	seq := uri.Segments()
-	bucket := seq[0]
+	bucket := conf.Bucket
 
-	client, err := newClient(bucket, &conf)
+	client, err := newClient(bucket, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -53,12 +51,9 @@ func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], 
 	}, nil
 }
 
-func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
+func newClient(bucket string, conf *stream.OptionS3) (*s3.Client, error) {
 	if conf.Service != nil {
-		service, ok := conf.Service.(*s3.Client)
-		if ok {
-			return service, nil
-		}
+		return conf.Service, nil
 	}
 
 	aws, err := config.LoadDefaultConfig(context.Background())
@@ -69,17 +64,8 @@ func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
 	return s3.NewFromConfig(aws), nil
 }
 
-func newURI(uri string) (*stream.URL, error) {
-	spec, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	return (*stream.URL)(spec), nil
-}
-
 // Put
-func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader) error {
+func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader, opts ...stream.WriterOpt) error {
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 	req.Body = val
@@ -92,7 +78,7 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader) error {
 }
 
 // Remove
-func (db *Storage[T]) Remove(ctx context.Context, key T) error {
+func (db *Storage[T]) Remove(ctx context.Context, key T, opts ...stream.WriterOpt) error {
 	req := &s3.DeleteObjectInput{
 		Bucket: aws.String(db.bucket),
 		Key:    aws.String(db.codec.EncodeKey(key)),
@@ -107,7 +93,7 @@ func (db *Storage[T]) Remove(ctx context.Context, key T) error {
 }
 
 // Has
-func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
+func (db *Storage[T]) Has(ctx context.Context, key T, opts ...stream.GetterOpt) (T, error) {
 	return db.has(ctx, db.codec.EncodeKey(key))
 }
 
@@ -131,7 +117,7 @@ func (db *Storage[T]) has(ctx context.Context, key string) (T, error) {
 }
 
 // Get item from storage
-func (db *Storage[T]) Get(ctx context.Context, key T) (T, io.ReadCloser, error) {
+func (db *Storage[T]) Get(ctx context.Context, key T, opts ...stream.GetterOpt) (T, io.ReadCloser, error) {
 	return db.get(ctx, db.codec.EncodeKey(key))
 }
 
@@ -155,11 +141,11 @@ func (db *Storage[T]) get(ctx context.Context, key string) (T, io.ReadCloser, er
 }
 
 // Match
-func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ MatchOpt() }) ([]T, error) {
+func (db *Storage[T]) Match(ctx context.Context, key T, opts ...stream.MatcherOpt) ([]T, stream.MatcherOpt, error) {
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
-		return nil, errServiceIO.New(err)
+		return nil, nil, errServiceIO.New(err)
 	}
 
 	seq := make([]T, val.KeyCount)
@@ -168,14 +154,27 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 
 		seq[i], err = db.has(ctx, key)
 		if err != nil {
-			return nil, errServiceIO.New(err)
+			return nil, nil, errServiceIO.New(err)
 		}
 	}
 
-	return seq, nil
+	return seq, lastKeyToCursor(val), nil
 }
 
-func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3.ListObjectsV2Input {
+type cursor struct{ hashKey, sortKey string }
+
+func (c cursor) HashKey() curie.IRI { return curie.IRI(c.hashKey) }
+func (c cursor) SortKey() curie.IRI { return curie.IRI(c.sortKey) }
+
+func lastKeyToCursor(val *s3.ListObjectsV2Output) stream.MatcherOpt {
+	if val.KeyCount == 0 || val.NextContinuationToken == nil {
+		return nil
+	}
+
+	return stream.Cursor(&cursor{hashKey: *val.Contents[val.KeyCount-1].Key})
+}
+
+func (db *Storage[T]) reqListObjects(key T, opts ...stream.MatcherOpt) *s3.ListObjectsV2Input {
 	var (
 		limit  int32   = 1000
 		cursor *string = nil

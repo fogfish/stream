@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	errInvalidConnectorURL = faults.Safe1[string]("invalid connector url %s")
-	errServiceIO           = faults.Type("service i/o failed")
+	errUndefinedBucket = faults.Type("undefined S3 bucket")
+	errServiceIO       = faults.Type("service i/o failed")
 )
 
 // NotFound is an error to handle unknown elements
