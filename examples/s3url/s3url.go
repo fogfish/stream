@@ -64,7 +64,7 @@ func examplePut(db Storage) {
 			Content:         fmt.Sprintf("This is example note %d.", i),
 		}
 
-		uri, err := db.Put(context.Background(), note, 1*time.Minute)
+		uri, err := db.Put(context.Background(), note, stream.AccessExpiredIn(1*time.Minute))
 		if err != nil {
 			fmt.Printf("=[ put ]=> failed: %s\n", err)
 			continue
@@ -104,7 +104,7 @@ func exampleGet(db Storage) {
 			ID:     curie.New("note:%d", i),
 		}
 
-		uri, err := db.Get(context.Background(), note, 1*time.Minute)
+		uri, err := db.Get(context.Background(), note, stream.AccessExpiredIn(1*time.Minute))
 		if err != nil {
 			fmt.Printf("=[ get ]=> failed: %s", err)
 			continue
@@ -164,7 +164,7 @@ func exampleMatch(db Storage) {
 	http := http.New()
 
 	key := Note{Author: curie.New("person:")}
-	seq, cur, err := db.Match(context.Background(), key, 1*time.Minute, stream.Limit(2))
+	seq, cur, err := db.Match(context.Background(), key, stream.AccessExpiredIn(1*time.Minute), stream.Limit(2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
@@ -179,7 +179,7 @@ func exampleMatch(db Storage) {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
-	seq, _, err = db.Match(context.Background(), key, 1*time.Minute, cur)
+	seq, _, err = db.Match(context.Background(), key, stream.AccessExpiredIn(1*time.Minute), cur)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}

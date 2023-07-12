@@ -1,7 +1,5 @@
 package s3url
 
-// TODO: duration is the option of I/O
-
 import (
 	"context"
 	"time"
@@ -65,7 +63,15 @@ func newClient(bucket string, conf *stream.OptionS3) (*s3.Client, error) {
 }
 
 // Put
-func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (string, error) {
+func (db *Storage[T]) Put(ctx context.Context, entity T, opts ...stream.WriterOpt) (string, error) {
+	expiresIn := time.Duration(20 * time.Minute)
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case interface{ Timeout() time.Duration }:
+			expiresIn = v.Timeout()
+		}
+	}
+
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 
@@ -87,7 +93,7 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (
 		}
 	}
 
-	val, err := db.signer.PresignPutObject(ctx, req)
+	val, err := db.signer.PresignPutObject(ctx, req, s3.WithPresignExpires(expiresIn))
 	if err != nil {
 		return "", err
 	}
@@ -96,7 +102,7 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, expire time.Duration) (
 }
 
 // Remove
-func (db *Storage[T]) Remove(ctx context.Context, key T) error {
+func (db *Storage[T]) Remove(ctx context.Context, key T, opts ...stream.WriterOpt) error {
 	req := &s3.DeleteObjectInput{
 		Bucket: aws.String(db.bucket),
 		Key:    aws.String(db.codec.EncodeKey(key)),
@@ -111,7 +117,7 @@ func (db *Storage[T]) Remove(ctx context.Context, key T) error {
 }
 
 // Has
-func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
+func (db *Storage[T]) Has(ctx context.Context, key T, opts ...stream.GetterOpt) (T, error) {
 	req := &s3.HeadObjectInput{
 		Bucket: aws.String(db.bucket),
 		Key:    aws.String(db.codec.EncodeKey(key)),
@@ -131,13 +137,21 @@ func (db *Storage[T]) Has(ctx context.Context, key T) (T, error) {
 }
 
 // Get
-func (db *Storage[T]) Get(ctx context.Context, key T, expire time.Duration) (string, error) {
+func (db *Storage[T]) Get(ctx context.Context, key T, opts ...stream.GetterOpt) (string, error) {
+	expiresIn := time.Duration(20 * time.Minute)
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case interface{ Timeout() time.Duration }:
+			expiresIn = v.Timeout()
+		}
+	}
+
 	req := &s3.GetObjectInput{
 		Bucket: aws.String(db.bucket),
 		Key:    aws.String(db.codec.EncodeKey(key)),
 	}
 
-	val, err := db.signer.PresignGetObject(ctx, req)
+	val, err := db.signer.PresignGetObject(ctx, req, s3.WithPresignExpires(expiresIn))
 	if err != nil {
 		return "", errServiceIO.New(err)
 	}
@@ -146,7 +160,15 @@ func (db *Storage[T]) Get(ctx context.Context, key T, expire time.Duration) (str
 }
 
 // Match
-func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration, opts ...stream.MatchOpt) ([]string, stream.MatchOpt, error) {
+func (db *Storage[T]) Match(ctx context.Context, key T, opts ...stream.MatcherOpt) ([]string, stream.MatcherOpt, error) {
+	expiresIn := time.Duration(20 * time.Minute)
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case interface{ Timeout() time.Duration }:
+			expiresIn = v.Timeout()
+		}
+	}
+
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
@@ -162,7 +184,7 @@ func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration, op
 			Key:    aws.String(key),
 		}
 
-		signed, err := db.signer.PresignGetObject(context.Background(), req)
+		signed, err := db.signer.PresignGetObject(context.Background(), req, s3.WithPresignExpires(expiresIn))
 		if err != nil {
 			return nil, nil, errServiceIO.New(err)
 		}
@@ -178,7 +200,7 @@ type cursor struct{ hashKey, sortKey string }
 func (c cursor) HashKey() curie.IRI { return curie.IRI(c.hashKey) }
 func (c cursor) SortKey() curie.IRI { return curie.IRI(c.sortKey) }
 
-func lastKeyToCursor(val *s3.ListObjectsV2Output) stream.MatchOpt {
+func lastKeyToCursor(val *s3.ListObjectsV2Output) stream.MatcherOpt {
 	if val.KeyCount == 0 || val.NextContinuationToken == nil {
 		return nil
 	}
@@ -186,7 +208,7 @@ func lastKeyToCursor(val *s3.ListObjectsV2Output) stream.MatchOpt {
 	return stream.Cursor(&cursor{hashKey: *val.Contents[val.KeyCount-1].Key})
 }
 
-func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3.ListObjectsV2Input {
+func (db *Storage[T]) reqListObjects(key T, opts ...stream.MatcherOpt) *s3.ListObjectsV2Input {
 	var (
 		limit  int32   = 1000
 		cursor *string = nil
