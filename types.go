@@ -3,8 +3,6 @@ package stream
 import (
 	"context"
 	"io"
-	"net/url"
-	"strings"
 
 	"github.com/fogfish/curie"
 )
@@ -37,9 +35,12 @@ type StreamGetter[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
+// Type alias for readability
+type MatchOpt = interface{ MatchOpt() }
+
 // StreamPattern defines simple pattern matching lookup I/O
 type StreamPattern[T Thing] interface {
-	Match(context.Context, T, ...interface{ MatchOpt() }) ([]T, error)
+	Match(context.Context, T, ...MatchOpt) ([]T, MatchOpt, error)
 }
 
 // Limit option for Match
@@ -92,33 +93,4 @@ type StreamWriter[T Thing] interface {
 type Streamer[T Thing] interface {
 	StreamReader[T]
 	StreamWriter[T]
-}
-
-//-----------------------------------------------------------------------------
-//
-// Utility types
-//
-//-----------------------------------------------------------------------------
-
-// URL custom type with helper functions
-type URL url.URL
-
-func (uri *URL) String() string {
-	return (*url.URL)(uri).String()
-}
-
-// query parameters
-func (uri *URL) Query(key, def string) string {
-	val := (*url.URL)(uri).Query().Get(key)
-
-	if val == "" {
-		return def
-	}
-
-	return val
-}
-
-// path segments of length
-func (uri *URL) Segments() []string {
-	return strings.Split((*url.URL)(uri).Path, "/")[1:]
 }

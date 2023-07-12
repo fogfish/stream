@@ -13,45 +13,53 @@
 package stream
 
 import (
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/curie"
 )
 
-/*
-Config options for the connection
-*/
-type Config struct {
-	Service  any
+// Option type to configure the connection
+type Option[T any] func(*T)
+
+// Config options for S3-based services
+type OptionS3 struct {
+	Service  *s3.Client
 	Prefixes curie.Prefixes
+	Bucket   string
 }
 
-func (*Config) Config() {}
-
 // NewConfig creates Config with default options
-func NewConfig() Config {
-	return Config{
+func NewOptionS3() *OptionS3 {
+	return &OptionS3{
 		Prefixes: curie.Namespaces{},
 	}
 }
 
-// Option type to configure the connection
-type Option func(cfg interface{ Config() })
-
 // Configure AWS Service for broker instance
-func WithService(service any) Option {
-	return func(conf interface{ Config() }) {
-		switch c := conf.(type) {
-		case *Config:
+func WithS3[T OptionS3](service *s3.Client) Option[T] {
+	return func(conf *T) {
+		switch c := any(conf).(type) {
+		case *OptionS3:
 			c.Service = service
 		}
 	}
 }
 
 // WithPrefixes defines prefixes for CURIEs
-func WithPrefixes(prefixes curie.Prefixes) Option {
-	return func(conf interface{ Config() }) {
-		switch c := conf.(type) {
-		case *Config:
+func WithPrefixes[T OptionS3](prefixes curie.Prefixes) Option[T] {
+	return func(conf *T) {
+		switch c := any(conf).(type) {
+		case *OptionS3:
 			c.Prefixes = prefixes
+		}
+	}
+}
+
+// WithBucket defined bucket for I/O
+func WithBucket[T OptionS3](bucket string) Option[T] {
+	return func(conf *T) {
+		switch c := any(conf).(type) {
+		case *OptionS3:
+			c.Bucket = bucket
 		}
 	}
 }

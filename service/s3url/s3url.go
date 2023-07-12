@@ -1,13 +1,15 @@
 package s3url
 
+// TODO: duration is the option of I/O
+
 import (
 	"context"
-	"net/url"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/curie"
 	"github.com/fogfish/stream"
 	"github.com/fogfish/stream/internal/codec"
 )
@@ -20,21 +22,19 @@ type Storage[T stream.Thing] struct {
 	codec  codec.Codec[T]
 }
 
-func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], error) {
-	conf := stream.NewConfig()
+func New[T stream.Thing](opts ...stream.Option[stream.OptionS3]) (*Storage[T], error) {
+	conf := stream.NewOptionS3()
 	for _, opt := range opts {
-		opt(&conf)
+		opt(conf)
 	}
 
-	uri, err := newURI(connector)
-	if err != nil || len(uri.Path) < 2 {
-		return nil, errInvalidConnectorURL.New(nil, connector)
+	if conf.Bucket == "" {
+		return nil, errUndefinedBucket.New(nil)
 	}
 
-	seq := uri.Segments()
-	bucket := seq[0]
+	bucket := conf.Bucket
 
-	client, err := newClient(bucket, &conf)
+	client, err := newClient(bucket, conf)
 	if err != nil {
 		return nil, err
 	}
@@ -51,12 +51,9 @@ func New[T stream.Thing](connector string, opts ...stream.Option) (*Storage[T], 
 	}, nil
 }
 
-func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
+func newClient(bucket string, conf *stream.OptionS3) (*s3.Client, error) {
 	if conf.Service != nil {
-		service, ok := conf.Service.(*s3.Client)
-		if ok {
-			return service, nil
-		}
+		return conf.Service, nil
 	}
 
 	aws, err := config.LoadDefaultConfig(context.Background())
@@ -65,15 +62,6 @@ func newClient(bucket string, conf *stream.Config) (*s3.Client, error) {
 	}
 
 	return s3.NewFromConfig(aws), nil
-}
-
-func newURI(uri string) (*stream.URL, error) {
-	spec, err := url.Parse(uri)
-	if err != nil {
-		return nil, err
-	}
-
-	return (*stream.URL)(spec), nil
 }
 
 // Put
@@ -158,11 +146,11 @@ func (db *Storage[T]) Get(ctx context.Context, key T, expire time.Duration) (str
 }
 
 // Match
-func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration, opts ...interface{ MatchOpt() }) ([]string, error) {
+func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration, opts ...stream.MatchOpt) ([]string, stream.MatchOpt, error) {
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
-		return nil, errServiceIO.New(err)
+		return nil, nil, errServiceIO.New(err)
 	}
 
 	seq := make([]string, val.KeyCount)
@@ -176,13 +164,26 @@ func (db *Storage[T]) Match(ctx context.Context, key T, expire time.Duration, op
 
 		signed, err := db.signer.PresignGetObject(context.Background(), req)
 		if err != nil {
-			return nil, errServiceIO.New(err)
+			return nil, nil, errServiceIO.New(err)
 		}
 
 		seq[i] = signed.URL
 	}
 
-	return seq, nil
+	return seq, lastKeyToCursor(val), nil
+}
+
+type cursor struct{ hashKey, sortKey string }
+
+func (c cursor) HashKey() curie.IRI { return curie.IRI(c.hashKey) }
+func (c cursor) SortKey() curie.IRI { return curie.IRI(c.sortKey) }
+
+func lastKeyToCursor(val *s3.ListObjectsV2Output) stream.MatchOpt {
+	if val.KeyCount == 0 || val.NextContinuationToken == nil {
+		return nil
+	}
+
+	return stream.Cursor(&cursor{hashKey: *val.Contents[val.KeyCount-1].Key})
 }
 
 func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatchOpt() }) *s3.ListObjectsV2Input {

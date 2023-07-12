@@ -32,7 +32,8 @@ func (n Note) SortKey() curie.IRI { return n.ID }
 type Storage = *s3url.Storage[Note]
 
 func main() {
-	db, err := s3url.New[Note](os.Args[1],
+	db, err := s3url.New[Note](
+		stream.WithBucket(os.Args[1]),
 		stream.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
 			"note":   "note/",
@@ -163,11 +164,12 @@ func exampleMatch(db Storage) {
 	http := http.New()
 
 	key := Note{Author: curie.New("person:")}
-	seq, err := db.Match(context.Background(), key, 1*time.Minute)
+	seq, cur, err := db.Match(context.Background(), key, 1*time.Minute, stream.Limit(2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
 
+	fmt.Println("=[ match 1st ]=> ")
 	for _, url := range seq {
 		note, err := exampleGetByURL(http, url)
 		if err != nil {
@@ -176,6 +178,22 @@ func exampleMatch(db Storage) {
 
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
+
+	seq, _, err = db.Match(context.Background(), key, 1*time.Minute, cur)
+	if err != nil {
+		fmt.Printf("=[ match ]=> failed: %v\n", err)
+	}
+
+	fmt.Println("=[ match 2nd ]=> ")
+	for _, url := range seq {
+		note, err := exampleGetByURL(http, url)
+		if err != nil {
+			return
+		}
+
+		fmt.Printf("=[ match ]=> %+v\n", note)
+	}
+
 }
 
 func exampleCopy(db Storage) {

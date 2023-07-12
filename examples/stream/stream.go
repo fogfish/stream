@@ -31,7 +31,8 @@ func (n Note) SortKey() curie.IRI { return n.ID }
 type Storage = *s3.Storage[Note]
 
 func main() {
-	db, err := s3.New[Note](os.Args[1],
+	db, err := s3.New[Note](
+		stream.WithBucket(os.Args[1]),
 		stream.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
 			"note":   "note/",
@@ -115,26 +116,27 @@ func exampleHas(db Storage) {
 
 func exampleMatch(db Storage) {
 	key := Note{Author: curie.New("person:")}
-	seq, err := db.Match(context.Background(), key, stream.Limit(2))
+	seq, cur, err := db.Match(context.Background(), key, stream.Limit(2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 		return
 	}
 
+	fmt.Println("=[ match 1st ]=> ")
 	for _, note := range seq {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
-	seq, err = db.Match(context.Background(), key, stream.Cursor(seq[1]))
+	seq, _, err = db.Match(context.Background(), key, cur)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 		return
 	}
 
+	fmt.Println("=[ match 2nd ]=> ")
 	for _, note := range seq {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
-
 }
 
 func exampleCopy(db Storage) {
