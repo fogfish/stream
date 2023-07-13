@@ -29,12 +29,14 @@ type Note struct {
 func (n Note) HashKey() curie.IRI { return n.Author }
 func (n Note) SortKey() curie.IRI { return n.ID }
 
+var expires1min = stream.AccessExpiredIn[Note](1 * time.Minute)
+
 type Storage = *s3url.Storage[Note]
 
 func main() {
 	db, err := s3url.New[Note](
-		stream.WithBucket(os.Args[1]),
-		stream.WithPrefixes(curie.Namespaces{
+		s3url.WithBucket(os.Args[1]),
+		s3url.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
 			"note":   "note/",
 			"backup": "backup/note/",
@@ -64,7 +66,7 @@ func examplePut(db Storage) {
 			Content:         fmt.Sprintf("This is example note %d.", i),
 		}
 
-		uri, err := db.Put(context.Background(), note, stream.AccessExpiredIn(1*time.Minute))
+		uri, err := db.Put(context.Background(), note, expires1min)
 		if err != nil {
 			fmt.Printf("=[ put ]=> failed: %s\n", err)
 			continue
@@ -104,7 +106,7 @@ func exampleGet(db Storage) {
 			ID:     curie.New("note:%d", i),
 		}
 
-		uri, err := db.Get(context.Background(), note, stream.AccessExpiredIn(1*time.Minute))
+		uri, err := db.Get(context.Background(), note, expires1min)
 		if err != nil {
 			fmt.Printf("=[ get ]=> failed: %s", err)
 			continue
@@ -164,7 +166,7 @@ func exampleMatch(db Storage) {
 	http := http.New()
 
 	key := Note{Author: curie.New("person:")}
-	seq, cur, err := db.Match(context.Background(), key, stream.AccessExpiredIn(1*time.Minute), stream.Limit(2))
+	seq, cur, err := db.Match(context.Background(), key, expires1min, stream.Limit[Note](2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
@@ -179,7 +181,7 @@ func exampleMatch(db Storage) {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
-	seq, _, err = db.Match(context.Background(), key, stream.AccessExpiredIn(1*time.Minute), cur)
+	seq, _, err = db.Match(context.Background(), key, expires1min, cur)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}

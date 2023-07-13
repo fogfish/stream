@@ -32,8 +32,8 @@ type Storage = *s3.Storage[Note]
 
 func main() {
 	db, err := s3.New[Note](
-		stream.WithBucket(os.Args[1]),
-		stream.WithPrefixes(curie.Namespaces{
+		s3.WithBucket(os.Args[1]),
+		s3.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
 			"note":   "note/",
 			"backup": "backup/note/",
@@ -116,7 +116,7 @@ func exampleHas(db Storage) {
 
 func exampleMatch(db Storage) {
 	key := Note{Author: curie.New("person:")}
-	seq, cur, err := db.Match(context.Background(), key, stream.Limit(2))
+	seq, cur, err := db.Match(context.Background(), key, stream.Limit[Note](2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 		return
