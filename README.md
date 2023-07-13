@@ -242,9 +242,10 @@ The build and testing process requires [Go](https://golang.org) version 1.13 or 
 **build** and **test** library.
 
 ```bash
-git clone https://github.com/fogfish/dynamo
-cd dynamo
-go test
+git clone https://github.com/fogfish/stream
+cd stream
+make      # build and test
+make deps # update deps 
 ```
 
 ### commit message
@@ -254,6 +255,7 @@ The commit message helps us to write a good release note, speed-up review proces
 ### bugs
 
 If you experience any issues with the library, please let us know via [GitHub issues](https://github.com/fogfish/dynamo/issue). We appreciate detailed and accurate reports that help us to identity and replicate the issue. 
+
 
 ## License
 
