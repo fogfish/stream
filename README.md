@@ -91,7 +91,7 @@ import (
 //
 // Create client and bind it with the bucket
 // Use URI notation to specify the diver (s3://) and the bucket (/my-bucket) 
-db, err := s3.New[Note]("s3://my-bucket")
+db, err := s3.New[Note](s3.WithBucket("my-bucket"))
 
 //
 // Write the stream with Put
@@ -186,7 +186,7 @@ import (
   "github.com/fogfish/stream/service/s3url"
 )
 
-db, err := s3url.New[Note]("s3://my-bucket")
+db, err := s3url.New[Note](s3url.WithBucket("my-bucket"))
 
 url, err := db.Put(context.TODO(),
   Note{
