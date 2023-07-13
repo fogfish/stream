@@ -24,12 +24,10 @@ type Thing interface {
 //
 //-----------------------------------------------------------------------------
 
-type GetterOpt = interface{ GetterOpt() }
-
 // Getter defines read by key notation
 type Getter[T Thing] interface {
-	Has(context.Context, T, ...GetterOpt) (T, error)
-	Get(context.Context, T, ...GetterOpt) (T, io.ReadCloser, error)
+	Has(context.Context, T, ...interface{ GetterOpt(T) }) (T, error)
+	Get(context.Context, T, ...interface{ GetterOpt(T) }) (T, io.ReadCloser, error)
 }
 
 //-----------------------------------------------------------------------------
@@ -38,11 +36,9 @@ type Getter[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-type MatcherOpt = interface{ MatcherOpt() }
-
 // Defines simple pattern matching I/O
 type Matcher[T Thing] interface {
-	Match(context.Context, T, ...MatcherOpt) ([]T, MatcherOpt, error)
+	Match(context.Context, T, ...interface{ MatcherOpt(T) }) ([]T, interface{ MatcherOpt(T) }, error)
 }
 
 //-----------------------------------------------------------------------------
@@ -63,12 +59,10 @@ type Reader[T Thing] interface {
 //
 //-----------------------------------------------------------------------------
 
-type WriterOpt = interface{ WriterOpt() }
-
 // Generic stream writer methods
 type Writer[T Thing] interface {
-	Put(context.Context, T, io.Reader, ...WriterOpt) error
-	Remove(context.Context, T, ...WriterOpt) error
+	Put(context.Context, T, io.Reader, ...interface{ WriterOpt(T) }) error
+	Remove(context.Context, T, ...interface{ WriterOpt(T) }) error
 }
 
 //-----------------------------------------------------------------------------
@@ -90,34 +84,34 @@ type Streamer[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // Limit option for Match
-func Limit(v int32) MatcherOpt { return limit(v) }
+func Limit[T Thing](v int32) interface{ MatcherOpt(T) } { return limit[T](v) }
 
-type limit int32
+type limit[T Thing] int32
 
-func (limit) MatcherOpt() {}
+func (limit[T]) MatcherOpt(T) {}
 
-func (limit limit) Limit() int32 { return int32(limit) }
+func (limit limit[T]) Limit() int32 { return int32(limit) }
 
 // Cursor option for Match
-func Cursor(c Thing) MatcherOpt { return cursor{c} }
+func Cursor[T Thing](c Thing) interface{ MatcherOpt(T) } { return cursor[T]{c} }
 
-type cursor struct{ Thing }
+type cursor[T Thing] struct{ Thing }
 
-func (cursor) MatcherOpt() {}
+func (cursor[T]) MatcherOpt(T) {}
 
 // Duration the stream object is accessible
-func AccessExpiredIn(t time.Duration) interface {
-	WriterOpt
-	GetterOpt
-	MatcherOpt
+func AccessExpiredIn[T Thing](t time.Duration) interface {
+	WriterOpt(T)
+	GetterOpt(T)
+	MatcherOpt(T)
 } {
-	return timeout(t)
+	return timeout[T](t)
 }
 
-type timeout time.Duration
+type timeout[T Thing] time.Duration
 
-func (timeout) WriterOpt()  {}
-func (timeout) GetterOpt()  {}
-func (timeout) MatcherOpt() {}
+func (timeout[T]) WriterOpt(T)  {}
+func (timeout[T]) GetterOpt(T)  {}
+func (timeout[T]) MatcherOpt(T) {}
 
-func (t timeout) Timeout() time.Duration { return time.Duration(t) }
+func (t timeout[T]) Timeout() time.Duration { return time.Duration(t) }
