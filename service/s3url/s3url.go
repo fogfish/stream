@@ -21,7 +21,7 @@ type Storage[T stream.Thing] struct {
 }
 
 func New[T stream.Thing](opts ...Option) (*Storage[T], error) {
-	conf := defaultConfig()
+	conf := defaultOptions()
 	for _, opt := range opts {
 		opt(conf)
 	}
@@ -48,7 +48,7 @@ func New[T stream.Thing](opts ...Option) (*Storage[T], error) {
 	}, nil
 }
 
-func newClient(bucket string, conf *Config) (*s3.Client, error) {
+func newClient(bucket string, conf *Options) (*s3.Client, error) {
 	if conf.service != nil {
 		return conf.service, nil
 	}
