@@ -71,13 +71,14 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, opts ...interface{ Writ
 		}
 	}
 
+	key := db.codec.EncodeKey(entity)
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
 
 	_, err := db.client.HeadObject(ctx,
 		&s3.HeadObjectInput{
 			Bucket: aws.String(db.bucket),
-			Key:    aws.String(db.codec.EncodeKey(entity)),
+			Key:    aws.String(key),
 		},
 	)
 	if err != nil {
@@ -85,10 +86,10 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, opts ...interface{ Writ
 		case recoverNotFound(err):
 			_, err := db.client.PutObject(ctx, req)
 			if err != nil {
-				return "", errServiceIO.New(err)
+				return "", errServiceIO.New(err, db.bucket, key)
 			}
 		default:
-			return "", errServiceIO.New(err)
+			return "", errServiceIO.New(err, db.bucket, key)
 		}
 	}
 
@@ -101,33 +102,35 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, opts ...interface{ Writ
 }
 
 // Remove
-func (db *Storage[T]) Remove(ctx context.Context, key T, opts ...interface{ WriterOpt(T) }) error {
+func (db *Storage[T]) Remove(ctx context.Context, entity T, opts ...interface{ WriterOpt(T) }) error {
+	key := db.codec.EncodeKey(entity)
 	req := &s3.DeleteObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
 
 	_, err := db.client.DeleteObject(ctx, req)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, key)
 	}
 
 	return nil
 }
 
 // Has
-func (db *Storage[T]) Has(ctx context.Context, key T, opts ...interface{ GetterOpt(T) }) (T, error) {
+func (db *Storage[T]) Has(ctx context.Context, entity T, opts ...interface{ GetterOpt(T) }) (T, error) {
+	key := db.codec.EncodeKey(entity)
 	req := &s3.HeadObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
 	val, err := db.client.HeadObject(ctx, req)
 	if err != nil {
 		switch {
 		case recoverNotFound(err):
-			return db.codec.Undefined, errNotFound(err, db.codec.EncodeKey(key))
+			return db.codec.Undefined, errNotFound(err, key)
 		default:
-			return db.codec.Undefined, errServiceIO.New(err)
+			return db.codec.Undefined, errServiceIO.New(err, db.bucket, key)
 		}
 	}
 
@@ -136,7 +139,7 @@ func (db *Storage[T]) Has(ctx context.Context, key T, opts ...interface{ GetterO
 }
 
 // Get
-func (db *Storage[T]) Get(ctx context.Context, key T, opts ...interface{ GetterOpt(T) }) (string, error) {
+func (db *Storage[T]) Get(ctx context.Context, entity T, opts ...interface{ GetterOpt(T) }) (string, error) {
 	expiresIn := time.Duration(20 * time.Minute)
 	for _, opt := range opts {
 		switch v := opt.(type) {
@@ -145,14 +148,15 @@ func (db *Storage[T]) Get(ctx context.Context, key T, opts ...interface{ GetterO
 		}
 	}
 
+	key := db.codec.EncodeKey(entity)
 	req := &s3.GetObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
 
 	val, err := db.signer.PresignGetObject(ctx, req, s3.WithPresignExpires(expiresIn))
 	if err != nil {
-		return "", errServiceIO.New(err)
+		return "", errServiceIO.New(err, db.bucket, key)
 	}
 
 	return val.URL, nil
@@ -171,7 +175,7 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
-		return nil, nil, errServiceIO.New(err)
+		return nil, nil, errServiceIO.New(err, db.bucket, db.codec.EncodeKey(key))
 	}
 
 	seq := make([]string, val.KeyCount)
@@ -185,7 +189,7 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 
 		signed, err := db.signer.PresignGetObject(context.Background(), req, s3.WithPresignExpires(expiresIn))
 		if err != nil {
-			return nil, nil, errServiceIO.New(err)
+			return nil, nil, errServiceIO.New(err, db.bucket, key)
 		}
 
 		seq[i] = signed.URL
@@ -238,7 +242,7 @@ func (db *Storage[T]) Wait(ctx context.Context, key T, timeout time.Duration) er
 		timeout,
 	)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, db.codec.EncodeKey(key))
 	}
 
 	return nil
@@ -253,7 +257,7 @@ func (db *Storage[T]) Copy(ctx context.Context, source T, target T) error {
 		},
 	)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, db.codec.EncodeKey(target))
 	}
 
 	return nil

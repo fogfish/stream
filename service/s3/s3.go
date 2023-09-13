@@ -71,21 +71,22 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, val io.Reader, opts ...
 
 	_, err := db.upload.Upload(ctx, req)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, db.codec.EncodeKey(entity))
 	}
 	return nil
 }
 
 // Remove
-func (db *Storage[T]) Remove(ctx context.Context, key T, opts ...interface{ WriterOpt(T) }) error {
+func (db *Storage[T]) Remove(ctx context.Context, entity T, opts ...interface{ WriterOpt(T) }) error {
+	key := db.codec.EncodeKey(entity)
 	req := &s3.DeleteObjectInput{
 		Bucket: aws.String(db.bucket),
-		Key:    aws.String(db.codec.EncodeKey(key)),
+		Key:    aws.String(key),
 	}
 
 	_, err := db.client.DeleteObject(ctx, req)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, key)
 	}
 
 	return nil
@@ -107,7 +108,7 @@ func (db *Storage[T]) has(ctx context.Context, key string) (T, error) {
 		case recoverNotFound(err):
 			return db.codec.Undefined, errNotFound(err, key)
 		default:
-			return db.codec.Undefined, errServiceIO.New(err)
+			return db.codec.Undefined, errServiceIO.New(err, db.bucket, key)
 		}
 	}
 
@@ -131,7 +132,7 @@ func (db *Storage[T]) get(ctx context.Context, key string) (T, io.ReadCloser, er
 		case recoverNoSuchKey(err):
 			return db.codec.Undefined, nil, errNotFound(err, key)
 		default:
-			return db.codec.Undefined, nil, errServiceIO.New(err)
+			return db.codec.Undefined, nil, errServiceIO.New(err, db.bucket, key)
 		}
 	}
 
@@ -144,7 +145,7 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
-		return nil, nil, errServiceIO.New(err)
+		return nil, nil, errServiceIO.New(err, db.bucket, db.codec.EncodeKey(key))
 	}
 
 	seq := make([]T, val.KeyCount)
@@ -153,7 +154,7 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 
 		seq[i], err = db.has(ctx, key)
 		if err != nil {
-			return nil, nil, errServiceIO.New(err)
+			return nil, nil, errServiceIO.New(err, db.bucket, key)
 		}
 	}
 
@@ -204,7 +205,7 @@ func (db *Storage[T]) Wait(ctx context.Context, key T, timeout time.Duration) er
 		timeout,
 	)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, db.codec.EncodeKey(key))
 	}
 
 	return nil
@@ -219,7 +220,7 @@ func (db *Storage[T]) Copy(ctx context.Context, source T, target T) error {
 		},
 	)
 	if err != nil {
-		return errServiceIO.New(err)
+		return errServiceIO.New(err, db.bucket, db.codec.EncodeKey(target))
 	}
 
 	return nil
