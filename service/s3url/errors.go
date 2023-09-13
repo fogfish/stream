@@ -9,7 +9,7 @@ import (
 
 const (
 	errUndefinedBucket = faults.Type("undefined S3 bucket")
-	errServiceIO       = faults.Type("service i/o failed")
+	errServiceIO       = faults.Safe2[string, string]("service i/o failed (bucket: %s, key: %s)")
 )
 
 // NotFound is an error to handle unknown elements
