@@ -71,27 +71,8 @@ func (db *Storage[T]) Put(ctx context.Context, entity T, opts ...interface{ Writ
 		}
 	}
 
-	key := db.codec.EncodeKey(entity)
 	req := db.codec.Encode(entity)
 	req.Bucket = aws.String(db.bucket)
-
-	_, err := db.client.HeadObject(ctx,
-		&s3.HeadObjectInput{
-			Bucket: aws.String(db.bucket),
-			Key:    aws.String(key),
-		},
-	)
-	if err != nil {
-		switch {
-		case recoverNotFound(err):
-			_, err := db.client.PutObject(ctx, req)
-			if err != nil {
-				return "", errServiceIO.New(err, db.bucket, key)
-			}
-		default:
-			return "", errServiceIO.New(err, db.bucket, key)
-		}
-	}
 
 	val, err := db.signer.PresignPutObject(ctx, req, s3.WithPresignExpires(expiresIn))
 	if err != nil {
