@@ -159,8 +159,9 @@ func (db *Storage[T]) Match(ctx context.Context, key T, opts ...interface{ Match
 		return nil, nil, errServiceIO.New(err, db.bucket, db.codec.EncodeKey(key))
 	}
 
-	seq := make([]string, val.KeyCount)
-	for i := 0; i < int(val.KeyCount); i++ {
+	cnt := int(aws.ToInt32(val.KeyCount))
+	seq := make([]string, cnt)
+	for i := 0; i < cnt; i++ {
 		key := *val.Contents[i].Key
 
 		req := &s3.GetObjectInput{
@@ -185,11 +186,12 @@ func (c cursor) HashKey() curie.IRI { return curie.IRI(c.hashKey) }
 func (c cursor) SortKey() curie.IRI { return curie.IRI(c.sortKey) }
 
 func lastKeyToCursor[T stream.Thing](val *s3.ListObjectsV2Output) interface{ MatcherOpt(T) } {
-	if val.KeyCount == 0 || val.NextContinuationToken == nil {
+	cnt := int(aws.ToInt32(val.KeyCount))
+	if cnt == 0 || val.NextContinuationToken == nil {
 		return nil
 	}
 
-	return stream.Cursor[T](&cursor{hashKey: *val.Contents[val.KeyCount-1].Key})
+	return stream.Cursor[T](&cursor{hashKey: *val.Contents[cnt-1].Key})
 }
 
 func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatcherOpt(T) }) *s3.ListObjectsV2Input {
@@ -208,7 +210,7 @@ func (db *Storage[T]) reqListObjects(key T, opts ...interface{ MatcherOpt(T) }) 
 
 	return &s3.ListObjectsV2Input{
 		Bucket:     aws.String(db.bucket),
-		MaxKeys:    limit,
+		MaxKeys:    aws.Int32(limit),
 		Prefix:     aws.String(db.codec.EncodeKey(key)),
 		StartAfter: cursor,
 	}
