@@ -1,6 +1,15 @@
+//
+// Copyright (C) 2020 - 2024 Dmitry Kolesnikov
+//
+// This file may be modified and distributed under the terms
+// of the MIT license.  See the LICENSE file for details.
+// https://github.com/fogfish/stream
+//
+
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -19,15 +28,13 @@ const n = 5
 
 // Note is an object manipulated at storage
 type Note struct {
-	Author          curie.IRI `metadata:"author"`
 	ID              curie.IRI `metadata:"id"`
 	ContentType     string    `metadata:"Content-Type"`
 	ContentLanguage string    `metadata:"Content-Language"`
 	Content         string
 }
 
-func (n Note) HashKey() curie.IRI { return n.Author }
-func (n Note) SortKey() curie.IRI { return n.ID }
+func (n Note) HashKey() curie.IRI { return n.ID }
 
 var expires1min = stream.AccessExpiredIn[Note](1 * time.Minute)
 
@@ -50,6 +57,7 @@ func main() {
 	exampleGet(db)
 	exampleHas(db)
 	exampleMatch(db)
+	exampleVisit(db)
 	exampleCopy(db)
 	exampleRemove(db)
 }
@@ -59,8 +67,7 @@ func examplePut(db Storage) {
 
 	for i := 0; i < n; i++ {
 		note := Note{
-			Author:          curie.New("person:%d", i),
-			ID:              curie.New("note:%d", i),
+			ID:              curie.New("person:%d/note/%d", i, i),
 			ContentType:     "text/plain",
 			ContentLanguage: "en",
 			Content:         fmt.Sprintf("This is example note %d.", i),
@@ -87,7 +94,6 @@ func examplePutByURL(stack http.Stack, uri string, note Note) error {
 		http.PUT(
 			ø.URI(uri),
 			ø.ContentType.Text,
-			ø.Header("X-Amz-Meta-Author", note.Author.Safe()),
 			ø.Header("X-Amz-Meta-Id", note.ID.Safe()),
 			ø.Header("Content-Language", note.ContentLanguage),
 			ø.Send(note.Content),
@@ -101,10 +107,7 @@ func exampleGet(db Storage) {
 	http := http.New()
 
 	for i := 0; i < n; i++ {
-		note := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
-		}
+		note := Note{ID: curie.New("person:%d/note/%d", i, i)}
 
 		uri, err := db.Get(context.Background(), note, expires1min)
 		if err != nil {
@@ -125,7 +128,7 @@ func exampleGet(db Storage) {
 func exampleGetByURL(stack http.Stack, uri string) (Note, error) {
 	var (
 		note Note
-		data []byte
+		data bytes.Buffer
 	)
 	err := stack.IO(context.Background(),
 		http.GET(
@@ -133,7 +136,6 @@ func exampleGetByURL(stack http.Stack, uri string) (Note, error) {
 			ø.Accept.TextPlain,
 
 			ƒ.Status.OK,
-			ƒ.Header("X-Amz-Meta-Author", (*string)(&note.Author)),
 			ƒ.Header("X-Amz-Meta-Id", (*string)(&note.ID)),
 			ƒ.Header("Content-Type", &note.ContentType),
 			ƒ.Header("Content-Language", &note.ContentLanguage),
@@ -141,16 +143,13 @@ func exampleGetByURL(stack http.Stack, uri string) (Note, error) {
 		),
 	)
 
-	note.Content = string(data)
+	note.Content = data.String()
 	return note, err
 }
 
 func exampleHas(db Storage) {
 	for i := 0; i < n; i++ {
-		note := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
-		}
+		note := Note{ID: curie.New("person:%d/note/%d", i, i)}
 
 		val, err := db.Has(context.Background(), note)
 		if err != nil {
@@ -165,14 +164,20 @@ func exampleHas(db Storage) {
 func exampleMatch(db Storage) {
 	http := http.New()
 
-	key := Note{Author: curie.New("person:")}
-	seq, cur, err := db.Match(context.Background(), key, expires1min, stream.Limit[Note](2))
+	key := Note{ID: curie.New("person:")}
+	seq, cur, err := db.Match(context.Background(), key, stream.Limit[Note](2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
 
 	fmt.Println("=[ match 1st ]=> ")
-	for _, url := range seq {
+	for _, note := range seq {
+		url, err := db.Get(context.Background(), note, expires1min)
+		if err != nil {
+			fmt.Printf("=[ get ]=> failed: %s", err)
+			return
+		}
+
 		note, err := exampleGetByURL(http, url)
 		if err != nil {
 			return
@@ -181,13 +186,19 @@ func exampleMatch(db Storage) {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
-	seq, _, err = db.Match(context.Background(), key, expires1min, cur)
+	seq, _, err = db.Match(context.Background(), key, cur)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 	}
 
 	fmt.Println("=[ match 2nd ]=> ")
-	for _, url := range seq {
+	for _, note := range seq {
+		url, err := db.Get(context.Background(), note, expires1min)
+		if err != nil {
+			fmt.Printf("=[ get ]=> failed: %s", err)
+			return
+		}
+
 		note, err := exampleGetByURL(http, url)
 		if err != nil {
 			return
@@ -195,22 +206,40 @@ func exampleMatch(db Storage) {
 
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
+}
 
+func exampleVisit(db Storage) {
+	http := http.New()
+
+	key := Note{ID: curie.New("person:")}
+	err := db.Visit(context.Background(), key,
+		func(n Note) (err error) {
+			url, err := db.Get(context.Background(), n, expires1min)
+			if err != nil {
+				fmt.Printf("=[ get ]=> failed: %s", err)
+				return
+			}
+
+			n, err = exampleGetByURL(http, url)
+			if err != nil {
+				return
+			}
+
+			fmt.Printf("=[ visit ]=> %+v\n", n)
+			return nil
+		},
+	)
+	if err != nil {
+		fmt.Printf("=[ visit ]=> failed: %v\n", err)
+	}
 }
 
 func exampleCopy(db Storage) {
 	for i := 0; i < n; i++ {
-		note := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
-		}
+		person := Note{ID: curie.New("person:%d/note/%d", i, i)}
+		backup := Note{ID: curie.New("backup:%d/note/%d", i, i)}
 
-		backup := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("backup:%d", i),
-		}
-
-		if err := db.Copy(context.TODO(), note, backup); err != nil {
+		if err := db.Copy(context.TODO(), person, backup); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}
@@ -220,15 +249,15 @@ func exampleCopy(db Storage) {
 			continue
 		}
 
-		fmt.Printf("=[ copy ]=> %+v to %+v\n", note, backup)
+		fmt.Printf("=[ copy ]=> %+v to %+v\n", person, backup)
 	}
 }
 
 func exampleRemove(db Storage) {
 	for i := 0; i < n; i++ {
 		for _, key := range []Note{
-			{Author: curie.New("person:%d", i), ID: curie.New("note:%d", i)},
-			{Author: curie.New("person:%d", i), ID: curie.New("backup:%d", i)},
+			{ID: curie.New("person:%d/note/%d", i, i)},
+			{ID: curie.New("backup:%d/note/%d", i, i)},
 		} {
 			err := db.Remove(context.TODO(), key)
 			if err != nil {

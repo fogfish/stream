@@ -1,4 +1,12 @@
-package s3
+//
+// Copyright (C) 2020 - 2024 Dmitry Kolesnikov
+//
+// This file may be modified and distributed under the terms
+// of the MIT license.  See the LICENSE file for details.
+// https://github.com/fogfish/stream
+//
+
+package s3ts
 
 import (
 	"errors"
@@ -8,12 +16,12 @@ import (
 )
 
 const (
-	errUndefinedBucket = faults.Type("undefined S3 bucket")
-	errServiceIO       = faults.Safe2[string, string]("service i/o failed (bucket: %s, key: %s)")
+	ErrUndefinedBucket = faults.Type("undefined S3 bucket")
+	ErrServiceIO       = faults.Safe2[string, string]("service i/o failed (bucket: %s, key: %s)")
 )
 
 // NotFound is an error to handle unknown elements
-func errNotFound(err error, key string) error {
+func ErrNotFound(err error, key string) error {
 	return &notFound{err: err, key: key}
 }
 
@@ -30,14 +38,14 @@ func (e *notFound) Unwrap() error { return e.err }
 
 func (e *notFound) NotFound() string { return e.key }
 
-func recoverNoSuchKey(err error) bool {
+func RecoverNoSuchKey(err error) bool {
 	var e interface{ ErrorCode() string }
 
 	ok := errors.As(err, &e)
 	return ok && e.ErrorCode() == "NoSuchKey"
 }
 
-func recoverNotFound(err error) bool {
+func RecoverNotFound(err error) bool {
 	var e interface{ ErrorCode() string }
 
 	ok := errors.As(err, &e)

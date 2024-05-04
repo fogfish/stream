@@ -1,3 +1,11 @@
+//
+// Copyright (C) 2020 - 2024 Dmitry Kolesnikov
+//
+// This file may be modified and distributed under the terms
+// of the MIT license.  See the LICENSE file for details.
+// https://github.com/fogfish/stream
+//
+
 package stream
 
 import (
@@ -12,11 +20,7 @@ import (
 // abstract writable/readable streams into storage services.
 //
 // The interfaces declares anything that have a unique identifier.
-// The unique identity is exposed by pair of string: HashKey and SortKey.
-type Thing interface {
-	HashKey() curie.IRI
-	SortKey() curie.IRI
-}
+type Stream interface{ HashKey() curie.IRI }
 
 //-----------------------------------------------------------------------------
 //
@@ -25,7 +29,7 @@ type Thing interface {
 //-----------------------------------------------------------------------------
 
 // Getter defines read by key notation
-type Getter[T Thing] interface {
+type Getter[T Stream] interface {
 	Has(context.Context, T, ...interface{ GetterOpt(T) }) (T, error)
 	Get(context.Context, T, ...interface{ GetterOpt(T) }) (T, io.ReadCloser, error)
 }
@@ -37,8 +41,13 @@ type Getter[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // Defines simple pattern matching I/O
-type Matcher[T Thing] interface {
+type Matcher[T Stream] interface {
 	Match(context.Context, T, ...interface{ MatcherOpt(T) }) ([]T, interface{ MatcherOpt(T) }, error)
+}
+
+// Defines simple pattern matching visitor
+type Visitor[T Stream] interface {
+	Visit(context.Context, T, func(T) error) error
 }
 
 //-----------------------------------------------------------------------------
@@ -48,9 +57,10 @@ type Matcher[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // KeyValReader a generic key-value trait to read domain objects
-type Reader[T Thing] interface {
+type Reader[T Stream] interface {
 	Getter[T]
 	Matcher[T]
+	Visitor[T]
 }
 
 //-----------------------------------------------------------------------------
@@ -60,7 +70,7 @@ type Reader[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // Generic stream writer methods
-type Writer[T Thing] interface {
+type Writer[T Stream] interface {
 	Put(context.Context, T, io.Reader, ...interface{ WriterOpt(T) }) error
 	Remove(context.Context, T, ...interface{ WriterOpt(T) }) error
 }
@@ -72,7 +82,7 @@ type Writer[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // Stream is a generic key-value trait to access domain objects.
-type Streamer[T Thing] interface {
+type Streamer[T Stream] interface {
 	Reader[T]
 	Writer[T]
 }
@@ -84,31 +94,30 @@ type Streamer[T Thing] interface {
 //-----------------------------------------------------------------------------
 
 // Limit option for Match
-func Limit[T Thing](v int32) interface{ MatcherOpt(T) } { return limit[T](v) }
+func Limit[T Stream](v int32) interface{ MatcherOpt(T) } { return limit[T](v) }
 
-type limit[T Thing] int32
+type limit[T Stream] int32
 
 func (limit[T]) MatcherOpt(T) {}
 
 func (limit limit[T]) Limit() int32 { return int32(limit) }
 
 // Cursor option for Match
-func Cursor[T Thing](c Thing) interface{ MatcherOpt(T) } { return cursor[T]{c} }
+func Cursor[T Stream](c Stream) interface{ MatcherOpt(T) } { return cursor[T]{c} }
 
-type cursor[T Thing] struct{ Thing }
+type cursor[T Stream] struct{ Stream }
 
 func (cursor[T]) MatcherOpt(T) {}
 
 // Duration the stream object is accessible
-func AccessExpiredIn[T Thing](t time.Duration) interface {
+func AccessExpiredIn[T Stream](t time.Duration) interface {
 	WriterOpt(T)
 	GetterOpt(T)
-	MatcherOpt(T)
 } {
 	return timeout[T](t)
 }
 
-type timeout[T Thing] time.Duration
+type timeout[T Stream] time.Duration
 
 func (timeout[T]) WriterOpt(T)  {}
 func (timeout[T]) GetterOpt(T)  {}

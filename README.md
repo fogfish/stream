@@ -1,6 +1,6 @@
 # stream
 
-The library implements a simple streaming abstraction to store linked-data, binary objects and its associated metadata at AWS storage services. The library support AWS S3, AWS S3 PreSigned URLs.
+The library implements a simple streaming abstraction to store binary objects and its associated metadata at AWS storage services. The library support AWS S3, AWS S3 PreSigned URLs.
 
 
 ## Inspiration
@@ -15,7 +15,7 @@ type Streamer[T stream.Thing] interface {
   Get(T) (T, io.Reader, error)
   Has(T) (T, error)
   Remove(T) error
-  Match(T) Seq[T]
+  Match(T) ([]T, error)
 }
 ```
 
@@ -31,31 +31,35 @@ Use `go get` to retrieve the library and add it as dependency to your applicatio
 go get -u github.com/fogfish/stream
 ```
 
-- [Getting Started](#getting-started)
-  - [Data types definition](#data-types-definition)
-  - [Stream I/O](#stream-io)
-  - [Working with streams metadata](#working-with-streams-metadata)
-  - [Error Handling](#error-handling)
-  - [Streaming presigned url](#streaming-presigned-url)
+- [stream](#stream)
+  - [Inspiration](#inspiration)
+  - [Getting started](#getting-started)
+    - [Data types definition](#data-types-definition)
+    - [Stream I/O](#stream-io)
+    - [Working with streams metadata](#working-with-streams-metadata)
+    - [Error Handling](#error-handling)
+    - [Streaming presigned url](#streaming-presigned-url)
+  - [How To Contribute](#how-to-contribute)
+    - [commit message](#commit-message)
+    - [bugs](#bugs)
+  - [License](#license)
 
 ### Data types definition
 
 Data types definition is an essential part of development with `stream` library. Golang structs declares metadata of your binary objects. Public fields are serialized into S3 metadata attributes, the field tag `metadata` controls marshal/unmarshal process. 
 
-The library demands from each structure implementation of `Thing` interface. This type acts as struct annotation -- Golang compiler raises an error at compile time if other data type is supplied for Stream I/O. Secondly, each structure defines unique "composite primary key". The library encourages definition of both partition and sort keys, which facilitates linked-data, hierarchical structures and cheap relations between data elements.
+The library demands from each structure implementation of `Stream` interface. This type acts as struct annotation -- Golang compiler raises an error at compile time if other data type is supplied for Stream I/O. Secondly, each structure defines unique "primary key" using `curie.IRI`.
 
 ```go
 type Note struct {
-	Author          string    `metadata:"Author"`
-	ID              string    `metadata:"Id"`
+	ID              curie.IRI `metadata:"Id"`
   ContentType     string    `metadata:"Content-Type"`
 	ContentLanguage string    `metadata:"Content-Language"`
 }
 
 //
-// Identity implements thing interface
-func (n Note) HashKey() string { return n.Author }
-func (n Note) SortKey() string { return n.ID }
+// Identity implements stream interface
+func (n Note) HashKey() string { return n.ID }
 
 //
 // this data type is a normal Golang struct
@@ -63,8 +67,7 @@ func (n Note) SortKey() string { return n.ID }
 // The struct define the path to the object on the bucket as
 // composition of Has & Sort keys together with object's metadata
 var note := Note{
-  Author:          "haskell",
-  ID:              "8980789222",
+  ID:              "haskell:8980789222",
   ContentType:     "text/plain",
   ContentLanguage: "en",
 }
@@ -77,7 +80,7 @@ This is it! Your application is ready to stream data to/form AWS S3 Buckets.
 Please [see and try examples](./examples/). Its cover all basic use-cases with runnable code snippets.
 
 ```bash
-go run examples/stream/stream.go s3:///my-bucket
+go run examples/stream/stream.go my-bucket
 ```
 
 The following code snippet shows a typical I/O patterns
@@ -104,10 +107,7 @@ if err := db.Put(context.TODO(), note, stream); err != nil {
 // and return a new copy upon the completion. The only requirement - ID has to
 // be defined.
 note, stream, err := db.Get(context.TODO(),
-  Note{
-    Author:  "haskell",
-    ID:      "8980789222",
-  },
+  Note{ID: "haskell:8980789222"},
 )
 
 switch {
@@ -138,7 +138,6 @@ Please see the original AWS post about [Working with object metadata](https://do
 ```go
 type Note struct {
   // User-defined metadata
-  Author    string `metadata:"Author"`
   ID        string `metadata:"Id"`
   Custom    string `metadata:"Custom"`
   Attribute string `metadata:"Attribute"`
@@ -154,7 +153,7 @@ type Note struct {
 
 ### Error Handling
 
-The library enforces for "assert errors for behavior, not type" as the error handling strategy, see [the post](https://tech.fog.fish/2022/07/05/assert-golang-errors-for-behavior.html) for details. 
+The library enforces for "assert errors for behavior, not type" as the error handling strategy, see [the post](https://tech.fog.fish/posts/2022/2022-07-05-assert-golang-errors-for-behavior) for details. 
 
 Use following behaviors to recover from errors
 
@@ -174,7 +173,7 @@ type Streamer[T stream.Thing] interface {
   Get(T) (string, error)
   Has(T) (T, error)
   Remove(T) error
-  Match(T) Seq[T]
+  Match(T) []T
 }
 ```
 
@@ -190,12 +189,11 @@ db, err := s3url.New[Note](s3url.WithBucket("my-bucket"))
 
 url, err := db.Put(context.TODO(),
   Note{
-    Author:          "haskell",
-    ID:              "8980789222",
+    ID:              "haskell:8980789222",
     ContentType:     "text/plain",
     ContentLanguage: "en",
   },
-  5*time.Minute
+  stream.AccessExpiredIn[Note](5 * time.Minute),
 )
 ```
 
@@ -205,8 +203,7 @@ Note: the usage of pre-signed url requires passing of all headers that has been 
 curl -XPUT https://pre-signed-url-goes-here \
   -H 'Content-Type: text/plain' \
   -H 'Content-Language: en' \
-  -H 'X-Amz-Meta-Author: haskell' \
-  -H 'X-Amz-Meta-Id: 8980789222' \
+  -H 'X-Amz-Meta-Id: haskell:8980789222' \
   -d 'some content'
 ```
 
@@ -214,11 +211,8 @@ Read object using the library:
 
 ```go
 url, err := db.Get(context.TODO(),
-  Note{
-    Author:          "haskell",
-    ID:              "8980789222",
-  },
-  5*time.Minute
+  Note{ID: "haskell:8980789222"},
+  stream.AccessExpiredIn[Note](5 * time.Minute),
 )
 ```
 

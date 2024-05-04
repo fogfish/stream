@@ -1,3 +1,11 @@
+//
+// Copyright (C) 2020 - 2024 Dmitry Kolesnikov
+//
+// This file may be modified and distributed under the terms
+// of the MIT license.  See the LICENSE file for details.
+// https://github.com/fogfish/stream
+//
+
 package main
 
 import (
@@ -18,15 +26,13 @@ const n = 5
 
 // Note is an object manipulated at storage
 type Note struct {
-	Author          curie.IRI  `metadata:"author"`
 	ID              curie.IRI  `metadata:"id"`
 	ContentType     string     `metadata:"Content-Type"`
 	ContentLanguage string     `metadata:"Content-Language"`
 	LastModified    *time.Time `metadata:"Last-Modified"`
 }
 
-func (n Note) HashKey() curie.IRI { return n.Author }
-func (n Note) SortKey() curie.IRI { return n.ID }
+func (n Note) HashKey() curie.IRI { return n.ID }
 
 type Storage = *s3.Storage[Note]
 
@@ -35,8 +41,7 @@ func main() {
 		s3.WithBucket(os.Args[1]),
 		s3.WithPrefixes(curie.Namespaces{
 			"person": "t/person/",
-			"note":   "note/",
-			"backup": "backup/note/",
+			"backup": "t/backup/",
 		}),
 	)
 	if err != nil {
@@ -47,6 +52,7 @@ func main() {
 	exampleGet(db)
 	exampleHas(db)
 	exampleMatch(db)
+	exampleVisit(db)
 	exampleCopy(db)
 	exampleRemove(db)
 }
@@ -54,8 +60,7 @@ func main() {
 func examplePut(db Storage) {
 	for i := 0; i < n; i++ {
 		note := Note{
-			Author:          curie.New("person:%d", i),
-			ID:              curie.New("note:%d", i),
+			ID:              curie.New("person:%d/note/%d", i, i),
 			ContentType:     "text/plain",
 			ContentLanguage: "en",
 		}
@@ -77,8 +82,7 @@ func examplePut(db Storage) {
 func exampleGet(db Storage) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
+			ID: curie.New("person:%d/note/%d", i, i),
 		}
 
 		note, sin, err := db.Get(context.Background(), key)
@@ -100,8 +104,7 @@ func exampleGet(db Storage) {
 func exampleHas(db Storage) {
 	for i := 0; i < n; i++ {
 		key := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
+			ID: curie.New("person:%d/note/%d", i, i),
 		}
 
 		note, err := db.Has(context.Background(), key)
@@ -115,7 +118,7 @@ func exampleHas(db Storage) {
 }
 
 func exampleMatch(db Storage) {
-	key := Note{Author: curie.New("person:")}
+	key := Note{ID: curie.New("person:")}
 	seq, cur, err := db.Match(context.Background(), key, stream.Limit[Note](2))
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
@@ -124,6 +127,12 @@ func exampleMatch(db Storage) {
 
 	fmt.Println("=[ match 1st ]=> ")
 	for _, note := range seq {
+		note, err = db.Has(context.Background(), note)
+		if err != nil {
+			fmt.Printf("=[ has ]=> failed: %s\n", err)
+			return
+		}
+
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
@@ -135,23 +144,43 @@ func exampleMatch(db Storage) {
 
 	fmt.Println("=[ match 2nd ]=> ")
 	for _, note := range seq {
+		note, err = db.Has(context.Background(), note)
+		if err != nil {
+			fmt.Printf("=[ has ]=> failed: %s\n", err)
+			return
+		}
+
 		fmt.Printf("=[ match ]=> %+v\n", note)
+	}
+}
+
+func exampleVisit(db Storage) {
+	key := Note{ID: curie.New("person:")}
+	err := db.Visit(context.Background(), key,
+		func(n Note) (err error) {
+			n, err = db.Has(context.Background(), n)
+			if err != nil {
+				fmt.Printf("=[ has ]=> failed: %s\n", err)
+				return
+			}
+
+			fmt.Printf("=[ visit ]=> %+v\n", n)
+			return nil
+		},
+	)
+
+	if err != nil {
+		fmt.Printf("=[ visit ]=> failed: %v\n", err)
+		return
 	}
 }
 
 func exampleCopy(db Storage) {
 	for i := 0; i < n; i++ {
-		note := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("note:%d", i),
-		}
+		person := Note{ID: curie.New("person:%d/note/%d", i, i)}
+		backup := Note{ID: curie.New("backup:%d/note/%d", i, i)}
 
-		backup := Note{
-			Author: curie.New("person:%d", i),
-			ID:     curie.New("backup:%d", i),
-		}
-
-		if err := db.Copy(context.TODO(), note, backup); err != nil {
+		if err := db.Copy(context.TODO(), person, backup); err != nil {
 			fmt.Printf("=[ copy ]=> failed: %v\n", err)
 			continue
 		}
@@ -161,15 +190,15 @@ func exampleCopy(db Storage) {
 			continue
 		}
 
-		fmt.Printf("=[ copy ]=> %+v to %+v\n", note, backup)
+		fmt.Printf("=[ copy ]=> %+v to %+v\n", person, backup)
 	}
 }
 
 func exampleRemove(db Storage) {
 	for i := 0; i < n; i++ {
 		for _, key := range []Note{
-			{Author: curie.New("person:%d", i), ID: curie.New("note:%d", i)},
-			{Author: curie.New("person:%d", i), ID: curie.New("backup:%d", i)},
+			{ID: curie.New("person:%d/note/%d", i, i)},
+			{ID: curie.New("backup:%d/note/%d", i, i)},
 		} {
 			err := db.Remove(context.TODO(), key)
 			if err != nil {
