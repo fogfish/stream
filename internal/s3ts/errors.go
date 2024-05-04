@@ -1,4 +1,4 @@
-package s3url
+package s3ts
 
 import (
 	"errors"
@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	errUndefinedBucket = faults.Type("undefined S3 bucket")
-	errServiceIO       = faults.Safe2[string, string]("service i/o failed (bucket: %s, key: %s)")
+	ErrUndefinedBucket = faults.Type("undefined S3 bucket")
+	ErrServiceIO       = faults.Safe2[string, string]("service i/o failed (bucket: %s, key: %s)")
 )
 
 // NotFound is an error to handle unknown elements
-func errNotFound(err error, key string) error {
+func ErrNotFound(err error, key string) error {
 	return &notFound{err: err, key: key}
 }
 
@@ -30,8 +30,14 @@ func (e *notFound) Unwrap() error { return e.err }
 
 func (e *notFound) NotFound() string { return e.key }
 
-// recover from AWS SDK Not Found error
-func recoverNotFound(err error) bool {
+func RecoverNoSuchKey(err error) bool {
+	var e interface{ ErrorCode() string }
+
+	ok := errors.As(err, &e)
+	return ok && e.ErrorCode() == "NoSuchKey"
+}
+
+func RecoverNotFound(err error) bool {
 	var e interface{ ErrorCode() string }
 
 	ok := errors.As(err, &e)

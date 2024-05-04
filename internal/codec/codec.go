@@ -5,24 +5,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/curie"
 	"github.com/fogfish/golem/hseq"
+	"github.com/fogfish/golem/optics"
 	"github.com/fogfish/stream"
 )
 
-type Codec[T stream.Thing] struct {
+type Codec[T stream.Stream] struct {
 	system    map[string]hseq.Type[T]
 	metadata  map[string]hseq.Type[T]
+	lens      optics.Lens[T, curie.IRI]
 	prefixes  curie.Prefixes
 	Undefined T
 }
 
-func New[T stream.Thing](prefixes curie.Prefixes) Codec[T] {
+func New[T stream.Stream](prefixes curie.Prefixes) Codec[T] {
 	codec := Codec[T]{
 		system:   make(map[string]hseq.Type[T]),
 		metadata: make(map[string]hseq.Type[T]),
+		lens:     optics.ForProduct1[T, curie.IRI](),
 		prefixes: prefixes,
 	}
 
@@ -63,15 +65,23 @@ func isSystemMetadata(id string) bool {
 	}
 }
 
-func (codec Codec[T]) EncodeKey(key stream.Thing) string {
+func (codec Codec[T]) EncodeKey(key stream.Stream) (string, string) {
 	hkey := curie.URI(codec.prefixes, key.HashKey())
-	skey := curie.URI(codec.prefixes, key.SortKey())
 
-	if skey == "" {
-		return hkey
+	if strings.HasPrefix(hkey, "s3://") {
+		seq := strings.SplitN(hkey[5:], "/", 2)
+		return seq[0], seq[1]
 	}
 
-	return hkey + "/" + skey
+	return "", hkey
+}
+
+func (codec Codec[T]) DecodeKey(key string) T {
+	var val T
+
+	codec.lens.Put(&val, curie.IRI(key))
+
+	return val
 }
 
 func (codec Codec[T]) Encode(entity T) *s3.PutObjectInput {
@@ -88,7 +98,6 @@ func (codec Codec[T]) Encode(entity T) *s3.PutObjectInput {
 	codec.encodeExpires(val, req)
 	codec.encodeMetadata(val, req)
 
-	req.Key = aws.String(codec.EncodeKey(entity))
 	return req
 }
 
