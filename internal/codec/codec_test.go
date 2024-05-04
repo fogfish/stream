@@ -93,6 +93,14 @@ func TestEncodeKey(t *testing.T) {
 		If(val).Equal("haskell:8980789222")
 }
 
+func TestEncodeKeyWithBucket(t *testing.T) {
+	codec := codec.New[Note](curie.Namespaces{})
+	can, val := codec.EncodeKey(Note{ID: "s3://example/haskell/8980789222"})
+	it.Ok(t).
+		If(can).Equal("example").
+		If(val).Equal("haskell/8980789222")
+}
+
 func TestDecodeKey(t *testing.T) {
 	codec := codec.New[Note](curie.Namespaces{})
 	val := codec.DecodeKey("haskell:8980789222")
