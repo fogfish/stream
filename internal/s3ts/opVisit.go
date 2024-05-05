@@ -16,6 +16,8 @@ import (
 
 // Visit
 func (db *Store[T]) Visit(ctx context.Context, key T, f func(T) error) error {
+	var reKey interface{ MatchKey(string) bool } = nil
+
 	req := db.reqListObjects(key)
 
 	for {
@@ -24,13 +26,16 @@ func (db *Store[T]) Visit(ctx context.Context, key T, f func(T) error) error {
 			return ErrServiceIO.New(err, aws.ToString(req.Bucket), aws.ToString(req.Prefix))
 		}
 
-		cnt := int(aws.ToInt32(val.KeyCount))
-		for i := 0; i < cnt; i++ {
-			if err := f(db.codec.DecodeKey(aws.ToString(val.Contents[i].Key))); err != nil {
-				return err
+		for _, el := range val.Contents {
+			k := aws.ToString(el.Key)
+			if reKey == nil || reKey.MatchKey(k) {
+				if err := f(db.codec.DecodeKey(k)); err != nil {
+					return err
+				}
 			}
 		}
 
+		cnt := int(aws.ToInt32(val.KeyCount))
 		if cnt == 0 || val.NextContinuationToken == nil {
 			return nil
 		}

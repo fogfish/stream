@@ -118,8 +118,10 @@ func exampleHas(db Storage) {
 }
 
 func exampleMatch(db Storage) {
+	re, _ := stream.RegExp[Note](`person/[0-9]/note/.*`)
+
 	key := Note{ID: curie.New("person:")}
-	seq, cur, err := db.Match(context.Background(), key, stream.Limit[Note](2))
+	seq, cur, err := db.Match(context.Background(), key, stream.Limit[Note](2), re)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 		return
@@ -136,7 +138,7 @@ func exampleMatch(db Storage) {
 		fmt.Printf("=[ match ]=> %+v\n", note)
 	}
 
-	seq, _, err = db.Match(context.Background(), key, cur)
+	seq, _, err = db.Match(context.Background(), key, cur, re)
 	if err != nil {
 		fmt.Printf("=[ match ]=> failed: %v\n", err)
 		return

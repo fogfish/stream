@@ -11,6 +11,7 @@ package stream
 import (
 	"context"
 	"io"
+	"regexp"
 	"time"
 
 	"github.com/fogfish/curie"
@@ -108,6 +109,22 @@ func Cursor[T Stream](c Stream) interface{ MatcherOpt(T) } { return cursor[T]{c}
 type cursor[T Stream] struct{ Stream }
 
 func (cursor[T]) MatcherOpt(T) {}
+
+// Regular Expression Matcher
+func RegExp[T Stream](pat string) (interface{ MatcherOpt(T) }, error) {
+	exp, err := regexp.Compile(pat)
+	if err != nil {
+		return nil, err
+	}
+
+	return re[T]{Regexp: exp}, nil
+}
+
+type re[T Stream] struct{ *regexp.Regexp }
+
+func (re[T]) MatcherOpt(T) {}
+
+func (re re[T]) MatchKey(key string) bool { return re.Regexp.MatchString(key) }
 
 // Duration the stream object is accessible
 func AccessExpiredIn[T Stream](t time.Duration) interface {

@@ -19,16 +19,26 @@ import (
 
 // Match
 func (db *Store[T]) Match(ctx context.Context, key T, opts ...interface{ MatcherOpt(T) }) ([]T, interface{ MatcherOpt(T) }, error) {
+	var reKey interface{ MatchKey(string) bool } = nil
+	for _, opt := range opts {
+		switch v := opt.(type) {
+		case interface{ MatchKey(string) bool }:
+			reKey = v
+		}
+	}
+
 	req := db.reqListObjects(key, opts...)
 	val, err := db.client.ListObjectsV2(context.Background(), req)
 	if err != nil {
 		return nil, nil, ErrServiceIO.New(err, aws.ToString(req.Bucket), aws.ToString(req.Prefix))
 	}
 
-	cnt := int(aws.ToInt32(val.KeyCount))
-	seq := make([]T, cnt)
-	for i := 0; i < cnt; i++ {
-		seq[i] = db.codec.DecodeKey(aws.ToString(val.Contents[i].Key))
+	seq := make([]T, 0)
+	for _, el := range val.Contents {
+		k := aws.ToString(el.Key)
+		if reKey == nil || reKey.MatchKey(k) {
+			seq = append(seq, db.codec.DecodeKey(k))
+		}
 	}
 
 	return seq, lastKeyToCursor[T](val), nil
