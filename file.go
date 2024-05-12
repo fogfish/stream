@@ -269,6 +269,11 @@ func (fd *writer[T]) Close() error {
 	if fd.w != nil && fd.r != nil {
 		err := fd.w.Close()
 		fd.wg.Wait()
+
+		if fd.err != nil {
+			return fd.err
+		}
+
 		return err
 	}
 

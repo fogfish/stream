@@ -125,6 +125,13 @@ var (
 		},
 	}
 
+	s3PutObjectError = mocks.PutObject{
+		Mock: mocks.Mock[manager.UploadOutput]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
+		},
+	}
+
 	s3ListObject = mocks.ListObject{
 		Mock: mocks.Mock[s3.ListObjectsV2Output]{
 			ExpectKey: dir[1:],
@@ -239,6 +246,7 @@ func TestReadWrite(t *testing.T) {
 
 	t.Run("File/Write", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3PutObject),
 			stream.WithS3Upload(s3PutObject),
 		)
 		it.Then(t).Should(it.Nil(err))
@@ -293,6 +301,26 @@ func TestReadWrite(t *testing.T) {
 		_, err = io.ReadAll(fd)
 		it.Then(t).Should(
 			it.True(errors.Is(err, fs.ErrNotExist)),
+		)
+	})
+
+	t.Run("File/Write/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3Upload(s3PutObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Create(file, nil)
+		it.Then(t).Must(it.Nil(err))
+
+		n, err := io.WriteString(fd, content)
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Equal(n, len(content)),
+		)
+
+		it.Then(t).Should(
+			it.Fail(fd.Close),
 		)
 	})
 
