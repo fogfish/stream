@@ -136,7 +136,7 @@ func (fsys *FileSystem[T]) Create(path string, attr *T) (File, error) {
 		}
 	}
 
-	return newWriter(fsys, path, attr)
+	return newWriter(fsys, path, attr), nil
 }
 
 // To open the file for reading use `Open` function giving the absolute path
@@ -149,10 +149,10 @@ func (fsys *FileSystem[T]) Open(path string) (fs.File, error) {
 	}
 
 	if isDir(path) {
-		return openDir(fsys, path)
+		return openDir(fsys, path), nil
 	}
 
-	return newReader(fsys, path)
+	return newReader(fsys, path), nil
 }
 
 // Stat returns a FileInfo describing the file.
@@ -248,14 +248,7 @@ func (fsys *FileSystem[T]) ReadDir(path string) ([]fs.DirEntry, error) {
 		return nil, err
 	}
 
-	dd, err := openDir(fsys, path)
-	if err != nil {
-		return nil, &fs.PathError{
-			Op:   "readdir",
-			Path: path,
-			Err:  err,
-		}
-	}
+	dd := openDir(fsys, path)
 
 	return dd.ReadDir(-1)
 }

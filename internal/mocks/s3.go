@@ -63,6 +63,10 @@ func (mock HeadObject) HeadObject(ctx context.Context, input *s3.HeadObjectInput
 		return nil, &types.NoSuchKey{}
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	return mock.ReturnVal, nil
 }
 
@@ -95,6 +99,10 @@ func (mock ListObject) ListObjectsV2(ctx context.Context, params *s3.ListObjects
 		return nil, err
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	return mock.ReturnVal, nil
 }
 
@@ -107,6 +115,10 @@ func (mock DeleteObject) DeleteObject(ctx context.Context, params *s3.DeleteObje
 		return nil, err
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	return mock.ReturnVal, nil
 }
 
@@ -117,6 +129,10 @@ type CopyObject struct{ Mock[s3.CopyObjectOutput] }
 func (mock CopyObject) CopyObject(ctx context.Context, params *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error) {
 	if err := mock.Assert(ctx, params.Key); err != nil {
 		return nil, err
+	}
+
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
 	}
 
 	return mock.ReturnVal, nil
@@ -140,6 +156,10 @@ func (mock PutObject) Upload(ctx context.Context, input *s3.PutObjectInput, opts
 		return nil, fmt.Errorf("expected val %s, got %s", mock.ExpectVal, string(buf))
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	return mock.ReturnVal, nil
 }
 
@@ -152,6 +172,10 @@ func (mock PresignGetObject) PresignGetObject(ctx context.Context, params *s3.Ge
 		return nil, err
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	return mock.ReturnVal, nil
 }
 
@@ -162,6 +186,10 @@ type PresignPutObject struct{ Mock[v4.PresignedHTTPRequest] }
 func (mock PresignPutObject) PresignPutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error) {
 	if err := mock.Assert(ctx, params.Key); err != nil {
 		return nil, err
+	}
+
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
 	}
 
 	return mock.ReturnVal, nil

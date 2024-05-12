@@ -32,14 +32,14 @@ var (
 )
 
 // open directory descriptor
-func openDir[T any](fsys *FileSystem[T], path string) (*dd[T], error) {
+func openDir[T any](fsys *FileSystem[T], path string) *dd[T] {
 	return &dd[T]{
 		info: info[T]{
 			path: path,
 			mode: fs.ModeDir,
 		},
 		fs: fsys,
-	}, nil
+	}
 }
 
 func (dd *dd[T]) Stat() (fs.FileInfo, error) { return dd.info, nil }

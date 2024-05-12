@@ -68,13 +68,13 @@ var (
 )
 
 // open read only descriptor to file
-func newReader[T any](fsys *FileSystem[T], name string) (*reader[T], error) {
+func newReader[T any](fsys *FileSystem[T], name string) *reader[T] {
 	return &reader[T]{
 		info: info[T]{
 			path: name,
 		},
 		fs: fsys,
-	}, nil
+	}
 }
 
 // check file's metadata
@@ -181,14 +181,14 @@ var (
 	_ io.Closer = (*writer[any])(nil)
 )
 
-func newWriter[T any](fsys *FileSystem[T], path string, attr *T) (*writer[T], error) {
+func newWriter[T any](fsys *FileSystem[T], path string, attr *T) *writer[T] {
 	return &writer[T]{
 		info: info[T]{
 			path: path,
 			attr: attr,
 		},
 		fs: fsys,
-	}, nil
+	}
 }
 
 func (fd *writer[T]) lazyOpen() error {

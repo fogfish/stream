@@ -126,6 +126,13 @@ var (
 		},
 	}
 
+	s3ListObjectError = mocks.ListObject{
+		Mock: mocks.Mock[s3.ListObjectsV2Output]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
+		},
+	}
+
 	s3DeleteObject = mocks.DeleteObject{
 		Mock: mocks.Mock[s3.DeleteObjectOutput]{
 			ExpectKey: file[1:],
@@ -301,6 +308,17 @@ func TestWalk(t *testing.T) {
 			it.Equal(seq[0].Name(), "1"),
 			it.Equal(seq[1].Name(), "2"),
 			it.Equal(seq[2].Name(), "3"),
+		)
+	})
+
+	t.Run("ReadDir/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3ListObjectError),
+		)
+		it.Then(t).Must(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.ReadDir(dir)),
 		)
 	})
 
