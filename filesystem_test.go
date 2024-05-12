@@ -430,6 +430,15 @@ func TestWalk(t *testing.T) {
 				return nil
 			}
 
+			it.Then(t).
+				ShouldNot(
+					it.Error(d.Info()),
+				).
+				Should(
+					it.Nil(err),
+					it.Equal(d.Type(), 0),
+				)
+
 			seq = append(seq, path)
 			return nil
 		})
@@ -543,6 +552,7 @@ func TestStat(t *testing.T) {
 			it.Equal(fi.Size(), size),
 			it.Equiv(fi.ModTime(), modified),
 			it.Equal(fi.IsDir(), false),
+			it.Equal(fi.Mode(), 0),
 		)
 	})
 
@@ -668,9 +678,12 @@ func TestMetadata(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 
 		meta := s3fs.StatSys(fi)
-		it.Then(t).Should(
-			it.Equiv(meta, &note),
-		)
+		it.Then(t).ShouldNot(
+			it.Nil(fi.Sys()),
+		).
+			Should(
+				it.Equiv(meta, &note),
+			)
 	})
 
 	t.Run("File/Stat", func(t *testing.T) {
