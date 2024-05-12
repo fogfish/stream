@@ -277,11 +277,11 @@ func (fd *writer[T]) Close() error {
 
 func (fd *writer[T]) Stat() (fs.FileInfo, error) {
 	if fd.fs.signer != nil && fd.fs.codec.s != nil {
-		if url, err := fd.preSignPutUrl(); err == nil {
-			if fd.info.attr == nil {
-				fd.info.attr = new(T)
-			}
+		if fd.info.attr == nil {
+			fd.info.attr = new(T)
+		}
 
+		if url, err := fd.preSignPutUrl(); err == nil {
 			fd.fs.codec.s.Put(fd.info.attr, url)
 		}
 	}

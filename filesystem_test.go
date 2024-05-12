@@ -154,12 +154,26 @@ var (
 		},
 	}
 
+	s3PresignPutObjectError = mocks.PresignPutObject{
+		Mock: mocks.Mock[v4.PresignedHTTPRequest]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
+		},
+	}
+
 	s3PresignGetObject = mocks.PresignGetObject{
 		Mock: mocks.Mock[v4.PresignedHTTPRequest]{
 			ExpectKey: file[1:],
 			ReturnVal: &v4.PresignedHTTPRequest{
 				URL: presignedUrl,
 			},
+		},
+	}
+
+	s3PresignGetObjectError = mocks.PresignGetObject{
+		Mock: mocks.Mock[v4.PresignedHTTPRequest]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
 		},
 	}
 )
@@ -678,7 +692,28 @@ func TestPreSign(t *testing.T) {
 
 		err = fd.Close()
 		it.Then(t).Must(it.Nil(err))
+	})
 
+	t.Run("File/Read/PreSignUrl/Error", func(t *testing.T) {
+		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+			stream.WithS3(s3GetObject),
+			stream.WithS3Signer(s3PresignGetObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+
+		meta := s3fs.StatSys(fi)
+		it.Then(t).Should(
+			it.Equal(meta.PreSignedUrl, ""),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
 	})
 
 	t.Run("File/Write/PreSignUrl", func(t *testing.T) {
@@ -696,6 +731,27 @@ func TestPreSign(t *testing.T) {
 		meta := s3fs.StatSys(fi)
 		it.Then(t).Should(
 			it.Equal(meta.PreSignedUrl, presignedUrl),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("File/Write/PreSignUrl/Error", func(t *testing.T) {
+		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+			stream.WithS3Signer(s3PresignPutObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Create(file, nil)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+
+		meta := s3fs.StatSys(fi)
+		it.Then(t).Should(
+			it.Equal(meta.PreSignedUrl, ""),
 		)
 
 		err = fd.Close()

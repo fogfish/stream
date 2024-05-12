@@ -59,12 +59,12 @@ func (mock HeadObject) HeadObject(ctx context.Context, input *s3.HeadObjectInput
 		return nil, err
 	}
 
-	if mock.ReturnVal == nil {
-		return nil, &types.NoSuchKey{}
-	}
-
 	if mock.ReturnErr != nil {
 		return nil, mock.ReturnErr
+	}
+
+	if mock.ReturnVal == nil {
+		return nil, &types.NoSuchKey{}
 	}
 
 	return mock.ReturnVal, nil
@@ -79,12 +79,12 @@ func (mock GetObject) GetObject(ctx context.Context, input *s3.GetObjectInput, o
 		return nil, err
 	}
 
-	if mock.ReturnVal == nil {
-		return nil, &types.NoSuchKey{}
-	}
-
 	if mock.ReturnErr != nil {
 		return nil, mock.ReturnErr
+	}
+
+	if mock.ReturnVal == nil {
+		return nil, &types.NoSuchKey{}
 	}
 
 	return mock.ReturnVal, nil
