@@ -1,3 +1,11 @@
+//
+// Copyright (C) 2024 Dmitry Kolesnikov
+//
+// This file may be modified and distributed under the terms
+// of the MIT license.  See the LICENSE file for details.
+// https://github.com/fogfish/stream
+//
+
 package stream_test
 
 import (
@@ -134,6 +142,18 @@ var (
 		},
 	}
 )
+
+func TestNew(t *testing.T) {
+	s3fs, err := stream.NewFS("test",
+		stream.WithS3(s3GetObject),
+		stream.WithS3Upload(s3PutObject),
+		stream.WithS3Signer(s3PresignGetObject),
+		stream.WithIOTimeout(5*time.Second),
+		stream.WithPreSignUrlTTL(20*time.Second),
+		stream.WithListingLimit(1000),
+	)
+	it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
+}
 
 func TestReadWrite(t *testing.T) {
 	t.Run("File/Read", func(t *testing.T) {
