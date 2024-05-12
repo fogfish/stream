@@ -10,6 +10,7 @@ package stream_test
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"io/fs"
 	"testing"
@@ -88,6 +89,19 @@ var (
 					"chapter": "streaming",
 				},
 			},
+		},
+	}
+
+	s3GetObjectNotFound = mocks.GetObject{
+		Mock: mocks.Mock[s3.GetObjectOutput]{
+			ExpectKey: file[1:],
+		},
+	}
+
+	s3GetObjectError = mocks.GetObject{
+		Mock: mocks.Mock[s3.GetObjectOutput]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
 		},
 	}
 
@@ -216,6 +230,35 @@ func TestReadWrite(t *testing.T) {
 
 		it.Then(t).Should(
 			it.Error(s3fs.Open("invalid..key/")),
+		)
+	})
+
+	t.Run("File/Read/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(io.ReadAll(fd)),
+		)
+	})
+
+	t.Run("File/Read/Error/NotFound", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObjectNotFound),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		_, err = io.ReadAll(fd)
+		it.Then(t).Should(
+			it.True(errors.Is(err, fs.ErrNotExist)),
 		)
 	})
 

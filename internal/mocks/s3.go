@@ -30,6 +30,7 @@ type Mock[T any] struct {
 	ExpectKey string
 	ExpectVal string
 	ReturnVal *T
+	ReturnErr error
 }
 
 func (mock Mock[T]) Assert(ctx context.Context, inputKey *string) error {
@@ -76,6 +77,10 @@ func (mock GetObject) GetObject(ctx context.Context, input *s3.GetObjectInput, o
 
 	if mock.ReturnVal == nil {
 		return nil, &types.NoSuchKey{}
+	}
+
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
 	}
 
 	return mock.ReturnVal, nil
