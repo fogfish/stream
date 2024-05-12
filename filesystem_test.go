@@ -155,6 +155,20 @@ func TestReadWrite(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
+	t.Run("Dir/Read", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(dir)
+		it.Then(t).Must(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(io.ReadAll(fd)),
+		)
+	})
+
 	t.Run("File/Write", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3Upload(s3PutObject),
@@ -345,6 +359,29 @@ func TestStat(t *testing.T) {
 		err = fd.Close()
 		it.Then(t).Must(it.Nil(err))
 	})
+
+	t.Run("Dir/Stat", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(dir)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(
+			it.Equal(fi.Name(), dir),
+			it.Equal(fi.Size(), 0),
+			it.Equiv(fi.ModTime(), time.Time{}),
+			it.Equal(fi.IsDir(), true),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+	})
+
 }
 
 type Note struct {
@@ -430,6 +467,29 @@ func TestPreSign(t *testing.T) {
 		it.Then(t).Should(
 			it.Equal(meta.PreSignedUrl, presignedUrl),
 		)
+	})
+
+	t.Run("File/Read/PreSignUrl", func(t *testing.T) {
+		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+			stream.WithS3(s3GetObject),
+			stream.WithS3Signer(s3PresignGetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+
+		meta := s3fs.StatSys(fi)
+		it.Then(t).Should(
+			it.Equal(meta.PreSignedUrl, presignedUrl),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+
 	})
 
 	t.Run("File/Write/PreSignUrl", func(t *testing.T) {

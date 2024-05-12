@@ -56,40 +56,6 @@ type FileSystem interface {
 Notably, the interface supports reading and writing [metadata associated with AWS objects](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html) using `fs.FileInfo`. 
 
 
-<!--
-
-The library uses generic programming style to implement actual storage I/O, while expose metadata object as `[T stream.Thing]` with implicit conversion back and forth between a concrete struct(s).
-
-```go
-type FileSystem interface {
-  Open(path string) (fs.File, error)
-
-}
-```
-
-
-
-Using this library, the application can abstract binary objects using streams (`io.Reader`) for the content and Golang structs for objects metadata.
-
-
-The file system abstraction 
-
-
-
-
-Essentially, the library implement a following generic key-value trait to access domain objects. 
-
-```go
-type Streamer[T stream.Thing] interface {
-  Put(T, io.Reader) error
-  Get(T) (T, io.Reader, error)
-  Has(T) (T, error)
-  Remove(T) error
-  Match(T) ([]T, error)
-}
-```
-
--->
 
 ## Getting started
 
@@ -127,10 +93,10 @@ Check out the [examples](./examples/). They cover all fundamental use cases with
 
 ```go
 import (
-	"io"
-	"os"
+  "io"
+  "os"
 
-	"github.com/fogfish/stream"
+  "github.com/fogfish/stream"
 )
 
 // mount s3 bucket as file system
