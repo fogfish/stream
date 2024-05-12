@@ -64,7 +64,7 @@ func (mock HeadObject) HeadObject(ctx context.Context, input *s3.HeadObjectInput
 	}
 
 	if mock.ReturnVal == nil {
-		return nil, &types.NoSuchKey{}
+		return nil, &types.NotFound{}
 	}
 
 	return mock.ReturnVal, nil

@@ -70,6 +70,19 @@ var (
 		},
 	}
 
+	s3HeadObjectNotFound = mocks.HeadObject{
+		Mock: mocks.Mock[s3.HeadObjectOutput]{
+			ExpectKey: file[1:],
+		},
+	}
+
+	s3HeadObjectError = mocks.HeadObject{
+		Mock: mocks.Mock[s3.HeadObjectOutput]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
+		},
+	}
+
 	s3GetObject = mocks.GetObject{
 		Mock: mocks.Mock[s3.GetObjectOutput]{
 			ExpectKey: file[1:],
@@ -505,6 +518,17 @@ func TestStat(t *testing.T) {
 		)
 	})
 
+	t.Run("Stat/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3HeadObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Stat(file)),
+		)
+	})
+
 	t.Run("Stat/Error/InvalidPath", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3(s3GetObject),
@@ -513,6 +537,18 @@ func TestStat(t *testing.T) {
 
 		it.Then(t).Should(
 			it.Error(s3fs.Stat("invalid..key/")),
+		)
+	})
+
+	t.Run("Stat/Error/NotFound", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3HeadObjectNotFound),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		_, err = s3fs.Stat(file)
+		it.Then(t).Should(
+			it.True(errors.Is(err, fs.ErrNotExist)),
 		)
 	})
 
