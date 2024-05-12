@@ -159,9 +159,23 @@ var (
 		},
 	}
 
+	s3DeleteObjectError = mocks.DeleteObject{
+		Mock: mocks.Mock[s3.DeleteObjectOutput]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
+		},
+	}
+
 	s3CopyObject = mocks.CopyObject{
 		Mock: mocks.Mock[s3.CopyObjectOutput]{
 			ExpectKey: file[1:],
+		},
+	}
+
+	s3CopyObjectError = mocks.CopyObject{
+		Mock: mocks.Mock[s3.CopyObjectOutput]{
+			ExpectKey: file[1:],
+			ReturnErr: errors.New("critical failure"),
 		},
 	}
 
@@ -414,6 +428,17 @@ func TestWalk(t *testing.T) {
 		)
 	})
 
+	t.Run("GlobWithPattern/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3ListObject),
+		)
+		it.Then(t).Must(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Glob(dir + "|\\")),
+		)
+	})
+
 	t.Run("WalkDir", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3(s3ListObject),
@@ -460,9 +485,22 @@ func TestRemove(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
+	t.Run("Remove/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3DeleteObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Remove(file)
+			}),
+		)
+	})
+
 	t.Run("Remove/Error/InvalidPath", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
-			stream.WithS3(s3GetObject),
+			stream.WithS3(s3DeleteObject),
 		)
 		it.Then(t).Should(it.Nil(err))
 
@@ -484,6 +522,19 @@ func TestCopy(t *testing.T) {
 
 		err = s3fs.Copy(file, "s3://test/file")
 		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("Copy/Error", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3CopyObjectError),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Copy(file, "s3://test/file")
+			}),
+		)
 	})
 
 	t.Run("Copy/Error/InvalidPath", func(t *testing.T) {
@@ -526,13 +577,26 @@ func TestWait(t *testing.T) {
 
 	t.Run("Wait/Error/InvalidPath", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
-			stream.WithS3(s3CopyObject),
+			stream.WithS3(s3HeadObject),
 		)
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
 			it.Fail(func() error {
 				return s3fs.Wait("invalid..key/", 5*time.Second)
+			}),
+		)
+	})
+
+	t.Run("Wait/Error/Timeout", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3HeadObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Wait(file, 0*time.Second)
 			}),
 		)
 	})
