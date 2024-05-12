@@ -207,6 +207,39 @@ func TestReadWrite(t *testing.T) {
 		err = fd.Close()
 		it.Then(t).Must(it.Nil(err))
 	})
+
+	t.Run("File/Read/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Open("invalid..key/")),
+		)
+	})
+
+	t.Run("File/Write/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Create("invalid..key/", nil)),
+		)
+	})
+
+	t.Run("File/Write/Error/Directory", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Create(dir, nil)),
+		)
+	})
 }
 
 func TestWalk(t *testing.T) {
@@ -225,6 +258,17 @@ func TestWalk(t *testing.T) {
 			it.Equal(seq[0].Name(), "1"),
 			it.Equal(seq[1].Name(), "2"),
 			it.Equal(seq[2].Name(), "3"),
+		)
+	})
+
+	t.Run("ReadDir/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.ReadDir("invalid..key/")),
 		)
 	})
 
@@ -290,6 +334,20 @@ func TestRemove(t *testing.T) {
 		err := s3fs.Remove(file)
 		it.Then(t).Must(it.Nil(err))
 	})
+
+	t.Run("Remove/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Remove("invalid..key/")
+			}),
+		)
+	})
+
 }
 
 func TestCopy(t *testing.T) {
@@ -302,10 +360,36 @@ func TestCopy(t *testing.T) {
 		err = s3fs.Copy(file, "s3://test/file")
 		it.Then(t).Must(it.Nil(err))
 	})
+
+	t.Run("Copy/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3CopyObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Copy("invalid..key/", "s3://test/file")
+			}),
+		)
+	})
+
+	t.Run("Copy/Error/InvalidSchema", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3CopyObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Copy(file, file)
+			}),
+		)
+	})
 }
 
 func TestWait(t *testing.T) {
-	t.Run("Copy", func(t *testing.T) {
+	t.Run("Wait", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3(s3HeadObject),
 		)
@@ -314,10 +398,23 @@ func TestWait(t *testing.T) {
 		err = s3fs.Wait(file, 5*time.Second)
 		it.Then(t).Must(it.Nil(err))
 	})
+
+	t.Run("Wait/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3CopyObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Wait("invalid..key/", 5*time.Second)
+			}),
+		)
+	})
 }
 
 func TestStat(t *testing.T) {
-	t.Run("File", func(t *testing.T) {
+	t.Run("Stat", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3(s3HeadObject),
 		)
@@ -330,6 +427,17 @@ func TestStat(t *testing.T) {
 			it.Equal(fi.Size(), size),
 			it.Equiv(fi.ModTime(), modified),
 			it.Equal(fi.IsDir(), false),
+		)
+	})
+
+	t.Run("Stat/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3GetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Stat("invalid..key/")),
 		)
 	})
 

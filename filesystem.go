@@ -97,7 +97,11 @@ func NewFS(bucket string, opts ...Option) (*FileSystem[struct{}], error) {
 
 // The file system requires absolute path starting from "/"
 func isValidPath(ctx string, path string) error {
-	if path[0] != '/' && !fs.ValidPath(path[1:]) {
+	if len(path) != 0 && path[len(path)-1] == '/' {
+		path = path[:len(path)-1]
+	}
+
+	if len(path) == 0 || path[0] != '/' || !fs.ValidPath(path[1:]) {
 		return &fs.PathError{
 			Op:   ctx,
 			Path: path,
