@@ -1,17 +1,15 @@
 module github.com/fogfish/stream
 
-go 1.19
+go 1.22
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.26.1
 	github.com/aws/aws-sdk-go-v2/config v1.27.11
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.16.15
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.53.1
-	github.com/fogfish/curie v1.8.2
-	github.com/fogfish/faults v0.2.0
-	github.com/fogfish/golem/hseq v1.1.2
-	github.com/fogfish/golem/optics v0.11.2
-	github.com/fogfish/it v1.0.0
+	github.com/fogfish/golem/hseq v1.2.0
+	github.com/fogfish/golem/optics v0.13.0
+	github.com/fogfish/it/v2 v2.0.2
 )
 
 require (

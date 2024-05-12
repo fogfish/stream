@@ -12,10 +12,7 @@
  - 'doc/**/*'
  - 'examples/**/*'
 
-"[#] api":
+"[#] stream":
  - '*.go'
- - 'creek/*'
-
-"[#] s3":
- - 'internal/s3/*'
- - 'internal/s3/**/*'
+ - 'internal/*'
+ - 'internal/**/*'
