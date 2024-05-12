@@ -31,12 +31,10 @@ func walk() error {
 		return err
 	}
 
-	return fs.WalkDir(s3fs, "/the/", func(path string, d fs.DirEntry, err error) error {
+	return fs.WalkDir(s3fs, "/", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("--> %v | %v\n", path, d.Name())
 
 		if d.IsDir() {
 			os.Stdout.WriteString(fmt.Sprintf("==> %s\n", path))
