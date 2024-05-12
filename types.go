@@ -11,116 +11,77 @@ package stream
 import (
 	"context"
 	"io"
+	"io/fs"
 	"time"
 
-	"github.com/fogfish/curie"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
-// Thing is the most generic item type used by the library to
-// abstract writable/readable streams into storage services.
-//
-// The interfaces declares anything that have a unique identifier.
-type Stream interface{ HashKey() curie.IRI }
+// Stat returns a FileInfo describing the file and its metadata from the file system.
+type Stat interface {
+	Stat() (fs.FileInfo, error)
+}
 
-//-----------------------------------------------------------------------------
-//
-// Stream Reader
-//
-//-----------------------------------------------------------------------------
+// File is a writable object
+type File interface {
+	Stat
+	io.Writer
+	io.Closer
+}
 
-// Getter defines read by key notation
-type Getter[T Stream] interface {
-	Has(context.Context, T, ...interface{ GetterOpt(T) }) (T, error)
-	Get(context.Context, T, ...interface{ GetterOpt(T) }) (T, io.ReadCloser, error)
+// File System extension supporting writable files
+type CreateFS[T any] interface {
+	fs.FS
+	Create(path string, attr *T) (File, error)
+}
+
+// File System extension supporting file removal
+type RemoveFS interface {
+	fs.FS
+	Remove(path string) error
+}
+
+// File System extension supporting file copying
+type CopyFS interface {
+	fs.FS
+	Copy(source, target string) error
+	Wait(path string, timeout time.Duration) error
+}
+
+// well-known attributes controlled by S3 system
+type SystemMetadata struct {
+	CacheControl    string
+	ContentEncoding string
+	ContentLanguage string
+	ContentType     string
+	Expires         *time.Time
+	ETag            string
+	LastModified    *time.Time
+	StorageClass    string
+}
+
+// Well-known attribute for reading pre-signed Urls of S3 objects
+type PreSignedUrl struct {
+	PreSignedUrl string
 }
 
 //-----------------------------------------------------------------------------
-//
-// Stream Pattern Matcher
-//
-//-----------------------------------------------------------------------------
 
-// Defines simple pattern matching I/O
-type Matcher[T Stream] interface {
-	Match(context.Context, T, ...interface{ MatcherOpt(T) }) ([]T, interface{ MatcherOpt(T) }, error)
+type S3 interface {
+	HeadObject(ctx context.Context, params *s3.HeadObjectInput, optFns ...func(*s3.Options)) (*s3.HeadObjectOutput, error)
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	ListObjectsV2(ctx context.Context, params *s3.ListObjectsV2Input, optFns ...func(*s3.Options)) (*s3.ListObjectsV2Output, error)
+	DeleteObject(ctx context.Context, params *s3.DeleteObjectInput, optFns ...func(*s3.Options)) (*s3.DeleteObjectOutput, error)
+	CopyObject(ctx context.Context, params *s3.CopyObjectInput, optFns ...func(*s3.Options)) (*s3.CopyObjectOutput, error)
 }
 
-// Defines simple pattern matching visitor
-type Visitor[T Stream] interface {
-	Visit(context.Context, T, func(T) error) error
+type S3Upload interface {
+	Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
 }
 
-//-----------------------------------------------------------------------------
-//
-// Stream Reader
-//
-//-----------------------------------------------------------------------------
-
-// KeyValReader a generic key-value trait to read domain objects
-type Reader[T Stream] interface {
-	Getter[T]
-	Matcher[T]
-	Visitor[T]
+type S3Signer interface {
+	PresignGetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
+	PresignPutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.PresignOptions)) (*v4.PresignedHTTPRequest, error)
 }
-
-//-----------------------------------------------------------------------------
-//
-// Stream Writer
-//
-//-----------------------------------------------------------------------------
-
-// Generic stream writer methods
-type Writer[T Stream] interface {
-	Put(context.Context, T, io.Reader, ...interface{ WriterOpt(T) }) error
-	Remove(context.Context, T, ...interface{ WriterOpt(T) }) error
-}
-
-//-----------------------------------------------------------------------------
-//
-// Storage interface
-//
-//-----------------------------------------------------------------------------
-
-// Stream is a generic key-value trait to access domain objects.
-type Streamer[T Stream] interface {
-	Reader[T]
-	Writer[T]
-}
-
-//-----------------------------------------------------------------------------
-//
-// Options
-//
-//-----------------------------------------------------------------------------
-
-// Limit option for Match
-func Limit[T Stream](v int32) interface{ MatcherOpt(T) } { return limit[T](v) }
-
-type limit[T Stream] int32
-
-func (limit[T]) MatcherOpt(T) {}
-
-func (limit limit[T]) Limit() int32 { return int32(limit) }
-
-// Cursor option for Match
-func Cursor[T Stream](c Stream) interface{ MatcherOpt(T) } { return cursor[T]{c} }
-
-type cursor[T Stream] struct{ Stream }
-
-func (cursor[T]) MatcherOpt(T) {}
-
-// Duration the stream object is accessible
-func AccessExpiredIn[T Stream](t time.Duration) interface {
-	WriterOpt(T)
-	GetterOpt(T)
-} {
-	return timeout[T](t)
-}
-
-type timeout[T Stream] time.Duration
-
-func (timeout[T]) WriterOpt(T)  {}
-func (timeout[T]) GetterOpt(T)  {}
-func (timeout[T]) MatcherOpt(T) {}
-
-func (t timeout[T]) Timeout() time.Duration { return time.Duration(t) }
