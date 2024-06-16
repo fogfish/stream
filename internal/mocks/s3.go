@@ -147,6 +147,10 @@ func (mock PutObject) Upload(ctx context.Context, input *s3.PutObjectInput, opts
 		return nil, err
 	}
 
+	if mock.ReturnErr != nil {
+		return nil, mock.ReturnErr
+	}
+
 	buf, err := io.ReadAll(input.Body)
 	if err != nil {
 		return nil, err
@@ -154,10 +158,6 @@ func (mock PutObject) Upload(ctx context.Context, input *s3.PutObjectInput, opts
 
 	if string(buf) != mock.ExpectVal {
 		return nil, fmt.Errorf("expected val %s, got %s", mock.ExpectVal, string(buf))
-	}
-
-	if mock.ReturnErr != nil {
-		return nil, mock.ReturnErr
 	}
 
 	return mock.ReturnVal, nil
