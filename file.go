@@ -201,7 +201,7 @@ func newWriter[T any](fsys *FileSystem[T], path string, attr *T) *writer[T] {
 	}
 }
 
-func (fd *writer[T]) lazyOpen() error {
+func (fd *writer[T]) lazyOpen() {
 	fd.r, fd.w = io.Pipe()
 	fd.wg = sync.WaitGroup{}
 	fd.wg.Add(1)
@@ -230,8 +230,6 @@ func (fd *writer[T]) lazyOpen() error {
 			fd.r.Close()
 		}
 	}()
-
-	return nil
 }
 
 func (fd *writer[T]) preSignPutUrl() (string, error) {
@@ -259,9 +257,7 @@ func (fd *writer[T]) preSignPutUrl() (string, error) {
 
 func (fd *writer[T]) Write(p []byte) (int, error) {
 	if fd.r == nil && fd.w == nil {
-		if err := fd.lazyOpen(); err != nil {
-			return 0, err
-		}
+		fd.lazyOpen()
 	}
 
 	if fd.err != nil {
