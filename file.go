@@ -59,8 +59,9 @@ func s3Key(path string) *string {
 // reader file descriptor
 type reader[T any] struct {
 	info[T]
-	fs *FileSystem[T]
-	r  io.ReadCloser
+	fs  *FileSystem[T]
+	r   io.ReadCloser
+	can context.CancelFunc
 }
 
 var (
@@ -110,10 +111,11 @@ func (fd *reader[T]) lazyOpen() error {
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), fd.fs.timeout)
-	defer cancel()
 
 	val, err := fd.fs.api.GetObject(ctx, req)
 	if err != nil {
+		cancel()
+
 		switch {
 		case recoverNoSuchKey(err):
 			return fs.ErrNotExist
@@ -127,6 +129,7 @@ func (fd *reader[T]) lazyOpen() error {
 	}
 
 	fd.r = val.Body
+	fd.can = cancel
 	fd.info.size = aws.ToInt64(val.ContentLength)
 	fd.info.time = aws.ToTime(val.LastModified)
 	fd.info.attr = new(T)
@@ -156,7 +159,14 @@ func (fd *reader[T]) Close() error {
 		return nil
 	}
 
-	defer func() { fd.r = nil }()
+	defer func() {
+		fd.r = nil
+		fd.can = nil
+	}()
+
+	if fd.can != nil {
+		fd.can()
+	}
 
 	if err := fd.r.Close(); err != nil {
 		return err
