@@ -182,6 +182,7 @@ type writer[T any] struct {
 	fs  *FileSystem[T]
 	w   *io.PipeWriter
 	r   *io.PipeReader
+	can context.CancelFunc
 	wg  sync.WaitGroup
 	err error
 }
@@ -210,7 +211,7 @@ func (fd *writer[T]) lazyOpen() error {
 		defer fd.wg.Done()
 
 		ctx, cancel := context.WithTimeout(context.Background(), fd.fs.timeout)
-		defer cancel()
+		fd.can = cancel
 
 		req := &s3.PutObjectInput{
 			Bucket:   aws.String(fd.fs.bucket),
@@ -227,6 +228,7 @@ func (fd *writer[T]) lazyOpen() error {
 				Path: fd.path,
 				Err:  err,
 			}
+			cancel()
 			fd.r.Close()
 		}
 	}()
@@ -268,7 +270,13 @@ func (fd *writer[T]) Write(p []byte) (int, error) {
 		return 0, fd.err
 	}
 
-	return fd.w.Write(p)
+	// Note: IO fails if pipe is closed.
+	n, err := fd.w.Write(p)
+	if fd.err != nil {
+		return 0, fd.err
+	}
+
+	return n, err
 }
 
 func (fd *writer[T]) Close() error {
@@ -279,6 +287,10 @@ func (fd *writer[T]) Close() error {
 	if fd.w != nil && fd.r != nil {
 		err := fd.w.Close()
 		fd.wg.Wait()
+
+		if fd.can != nil {
+			fd.can()
+		}
 
 		if fd.err != nil {
 			return fd.err
