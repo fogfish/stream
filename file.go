@@ -227,7 +227,6 @@ func (fd *writer[T]) lazyOpen() error {
 				Path: fd.path,
 				Err:  err,
 			}
-			cancel()
 			fd.r.Close()
 		}
 	}()
