@@ -135,7 +135,7 @@ func TestReadWrite(t *testing.T) {
 			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, "the"), 0555)),
 		)
 
-		_, err = s3fs.Create("/the/file", nil)
+		_, err = s3fs.Create("/the/file/some", nil)
 		it.Then(t).ShouldNot(it.Nil(err))
 	})
 
