@@ -31,6 +31,16 @@ var (
 func TestNew(t *testing.T) {
 	s3fs, err := lfs.NewTempFS("", "lfs")
 	it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
+
+	s3fs, err = lfs.New("/")
+	it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
+
+	_, err = lfs.New("not.found")
+	it.Then(t).ShouldNot(it.Nil(err))
+
+	_, err = lfs.NewTempFS("not.found", "lfs")
+	it.Then(t).ShouldNot(it.Nil(err))
+
 }
 
 func TestReadWrite(t *testing.T) {
@@ -360,7 +370,7 @@ func TestCopy(t *testing.T) {
 
 		it.Then(t).Should(
 			it.Fail(func() error {
-				return s3fs.Copy(file, file)
+				return s3fs.Copy(file, "some/invalid/file")
 			}),
 		)
 	})

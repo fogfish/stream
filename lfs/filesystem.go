@@ -74,12 +74,28 @@ func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error)
 	}
 
 	file := filepath.Join(fsys.Root, path)
+	return fsys.osCreate("create", file)
+}
 
-	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
-		return nil, err
+func (fsys *FileSystem) osCreate(ctx, path string) (stream.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return nil, &fs.PathError{
+			Op:   ctx,
+			Path: path,
+			Err:  err,
+		}
 	}
 
-	return os.Create(file)
+	fd, err := os.Create(path)
+	if err != nil {
+		return nil, &fs.PathError{
+			Op:   ctx,
+			Path: path,
+			Err:  err,
+		}
+	}
+
+	return fd, nil
 }
 
 // To open the file for reading use `Open` function giving the absolute path
@@ -181,21 +197,9 @@ func (fsys *FileSystem) Copy(source, target string) (err error) {
 	}
 	defer r.Close()
 
-	if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
-		return &fs.PathError{
-			Op:   "copy",
-			Path: target,
-			Err:  err,
-		}
-	}
-
-	w, err := os.Create(target)
+	w, err := fsys.osCreate("copy", target)
 	if err != nil {
-		return &fs.PathError{
-			Op:   "copy",
-			Path: target,
-			Err:  err,
-		}
+		return err
 	}
 	defer func() { err = w.Close() }()
 
