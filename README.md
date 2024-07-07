@@ -55,6 +55,9 @@ type FileSystem interface {
 
 Notably, the interface supports reading and writing [metadata associated with AWS objects](https://docs.aws.amazon.com/AmazonS3/latest/userguide/UsingMetadata.html) using `fs.FileInfo`. 
 
+The filesystem abstraction operates based on two fundamental principles:
+1. Files are always accessed using an absolute path starting with `/`. This absolute path is interpreted within the context of the "mounted" file system.
+2. Directories always end with a `/` to distinguish them from files.  
 
 
 ## Getting started
@@ -81,6 +84,7 @@ go get -u github.com/fogfish/stream
   - [Type-safe objects metadata](#type-safe-objects-metadata)
   - [Presigned Urls](#presigned-urls)
   - [Error handling](#error-handling)
+  - [Local file system](#local-file-system)
 - [How To Contribute](#how-to-contribute)
   - [commit message](#commit-message)
   - [bugs](#bugs)
@@ -327,6 +331,16 @@ curl -XPUT https://pre-signed-url-goes-here \
 
 The library consistently returns `fs.PathError`, except in cases where the object is not found, in which `fs.ErrNotExist` is returned. Additionally, it refrains from wrapping stream I/O errors.
 
+
+### Local file system
+
+The library implements compatible wrapper of `os.DirFS` to enhance functionality and provide a more user-friendly interface for filesystem operations, allowing clients to seamlessly mount both S3 and local file systems.
+
+```go
+import "github.com/fogfish/stream/lfs"
+
+fs, err := lfs.New("/path/to/root")
+```
 
 ## How To Contribute
 

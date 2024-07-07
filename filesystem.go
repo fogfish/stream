@@ -95,27 +95,6 @@ func NewFS(bucket string, opts ...Option) (*FileSystem[struct{}], error) {
 	return New[struct{}](bucket, opts...)
 }
 
-// The file system requires absolute path starting from "/"
-func isValidPath(ctx string, path string) error {
-	if len(path) != 0 && path[len(path)-1] == '/' {
-		path = path[:len(path)-1]
-	}
-
-	if len(path) == 0 || path[0] != '/' || !fs.ValidPath(path[1:]) {
-		return &fs.PathError{
-			Op:   ctx,
-			Path: path,
-			Err:  fs.ErrInvalid,
-		}
-	}
-	return nil
-}
-
-// The file system emulates "dirs" as any valid path ending with "/"
-func isDir(path string) bool {
-	return strings.HasSuffix(path, "/") || len(path) == 0
-}
-
 // To open the file for writing use `Create` function giving the absolute path
 // starting with `/`, the returned file descriptor is a composite of
 // `io.Writer`, `io.Closer` and `stream.Stat`. Utilize Golang's convenient
@@ -124,16 +103,8 @@ func isDir(path string) bool {
 // The object is considered successfully created on S3 only if all `Write`
 // operations and subsequent `Close` actions are successful.
 func (fsys *FileSystem[T]) Create(path string, attr *T) (File, error) {
-	if err := isValidPath("create", path); err != nil {
+	if err := RequireValidFile("create", path); err != nil {
 		return nil, err
-	}
-
-	if isDir(path) {
-		return nil, &fs.PathError{
-			Op:   "create",
-			Path: path,
-			Err:  errors.New("is a directory"),
-		}
 	}
 
 	return newWriter(fsys, path, attr), nil
@@ -144,11 +115,11 @@ func (fsys *FileSystem[T]) Create(path string, attr *T) (File, error) {
 // `io.Reader`, `io.Closer` and `stream.Stat`. Utilize Golang's convenient
 // streaming methods to consume S3 object seamlessly.
 func (fsys *FileSystem[T]) Open(path string) (fs.File, error) {
-	if err := isValidPath("open", path); err != nil {
+	if err := RequireValidPath("open", path); err != nil {
 		return nil, err
 	}
 
-	if isDir(path) {
+	if IsValidDir(path) {
 		return openDir(fsys, path), nil
 	}
 
@@ -158,13 +129,13 @@ func (fsys *FileSystem[T]) Open(path string) (fs.File, error) {
 // Stat returns a FileInfo describing the file.
 // File system executes HeadObject S3 API call to obtain metadata.
 func (fsys *FileSystem[T]) Stat(path string) (fs.FileInfo, error) {
-	if err := isValidPath("stat", path); err != nil {
+	if err := RequireValidPath("stat", path); err != nil {
 		return nil, err
 	}
 
 	info := info[T]{path: path}
 
-	if isDir(path) {
+	if IsValidDir(path) {
 		info.mode = fs.ModeDir
 		return info, nil
 	}
@@ -244,7 +215,7 @@ func (fsys *FileSystem[T]) preSignGetUrl(s3key *string) (string, error) {
 //
 // It return path relative to pattern for all found object.
 func (fsys *FileSystem[T]) ReadDir(path string) ([]fs.DirEntry, error) {
-	if err := isValidPath("readdir", path); err != nil {
+	if err := RequireValidDir("readdir", path); err != nil {
 		return nil, err
 	}
 
@@ -294,7 +265,7 @@ func (fsys *FileSystem[T]) Glob(pattern string) ([]string, error) {
 
 // Remove object
 func (fsys *FileSystem[T]) Remove(path string) error {
-	if err := isValidPath("remove", path); err != nil {
+	if err := RequireValidFile("remove", path); err != nil {
 		return err
 	}
 
@@ -321,7 +292,7 @@ func (fsys *FileSystem[T]) Remove(path string) error {
 // Copy object from source location to the target.
 // The target shall be absolute s3://bucket/key url.
 func (fsys *FileSystem[T]) Copy(source, target string) error {
-	if err := isValidPath("copy", source); err != nil {
+	if err := RequireValidPath("copy", source); err != nil {
 		return err
 	}
 
@@ -356,7 +327,7 @@ func (fsys *FileSystem[T]) Copy(source, target string) error {
 
 // Wait for timeout until path exists
 func (fsys *FileSystem[T]) Wait(path string, timeout time.Duration) error {
-	if err := isValidPath("wait", path); err != nil {
+	if err := RequireValidFile("wait", path); err != nil {
 		return err
 	}
 
