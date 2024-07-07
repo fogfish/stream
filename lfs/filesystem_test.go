@@ -23,24 +23,19 @@ import (
 
 var (
 	file    = "/the/example/key"
-	dir     = file + "/"
+	dir     = "/the/example/dir/"
 	content = "Hello World!"
+	size    = int64(len(content))
 )
 
 func TestNew(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
-
-	s3fs, err := lfs.New(root)
+	s3fs, err := lfs.NewTempFS("", "lfs")
 	it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
 }
 
 func TestReadWrite(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
-
 	t.Run("File/Write", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		fd, err := s3fs.Create(file, nil)
@@ -57,8 +52,11 @@ func TestReadWrite(t *testing.T) {
 	})
 
 	t.Run("File/Read", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Should(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
 
 		fd, err := s3fs.Open(file)
 		it.Then(t).Must(it.Nil(err))
@@ -74,8 +72,11 @@ func TestReadWrite(t *testing.T) {
 	})
 
 	t.Run("Dir/Read", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Should(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, dir), 0755)),
+		)
 
 		fd, err := s3fs.Open(dir)
 		it.Then(t).Should(
@@ -86,7 +87,7 @@ func TestReadWrite(t *testing.T) {
 	})
 
 	t.Run("File/Read/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -107,7 +108,7 @@ func TestReadWrite(t *testing.T) {
 	// })
 
 	t.Run("File/Read/Error/NotFound", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		_, err = s3fs.Open("/not.found")
@@ -134,7 +135,7 @@ func TestReadWrite(t *testing.T) {
 	// })
 
 	t.Run("File/Write/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -143,7 +144,7 @@ func TestReadWrite(t *testing.T) {
 	})
 
 	t.Run("File/Write/Error/Directory", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -153,18 +154,18 @@ func TestReadWrite(t *testing.T) {
 }
 
 func TestWalk(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
-	it.Then(t).ShouldNot(
-		it.Error(0, os.MkdirAll(filepath.Join(root, dir), 0755)),
-		it.Error(os.Create(filepath.Join(root, dir, "1"))),
-		it.Error(os.Create(filepath.Join(root, dir, "2"))),
-		it.Error(os.Create(filepath.Join(root, dir, "3"))),
-	)
 
 	t.Run("ReadDir", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, dir), 0755)),
+		)
+		it.Then(t).ShouldNot(
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "1"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "2"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "3"))),
+		)
 
 		seq, err := s3fs.ReadDir(dir)
 		it.Then(t).Must(
@@ -179,7 +180,7 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("ReadDir/Error", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Must(it.Nil(err))
 
 		it.Then(t).Should(
@@ -188,7 +189,7 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("ReadDir/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -197,8 +198,16 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("Glob", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, dir), 0755)),
+		)
+		it.Then(t).ShouldNot(
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "1"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "2"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "3"))),
+		)
 
 		seq, err := s3fs.Glob(dir)
 		it.Then(t).Must(it.Nil(err))
@@ -208,8 +217,16 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("GlobWithPattern", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, dir), 0755)),
+		)
+		it.Then(t).ShouldNot(
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "1"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "2"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "3"))),
+		)
 
 		seq, err := s3fs.Glob(dir + "|2")
 		it.Then(t).Must(it.Nil(err))
@@ -219,7 +236,7 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("GlobWithPattern/Error", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Must(it.Nil(err))
 
 		it.Then(t).Should(
@@ -228,8 +245,16 @@ func TestWalk(t *testing.T) {
 	})
 
 	t.Run("WalkDir", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, dir), 0755)),
+		)
+		it.Then(t).ShouldNot(
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "1"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "2"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, dir, "3"))),
+		)
 
 		seq := make([]string, 0)
 		err = fs.WalkDir(s3fs, dir, func(path string, d fs.DirEntry, err error) error {
@@ -255,30 +280,25 @@ func TestWalk(t *testing.T) {
 		})
 		it.Then(t).Must(it.Nil(err))
 		it.Then(t).Should(
-			it.Seq(seq).Equal(file+"/1", file+"/2", file+"/3"),
+			it.Seq(seq).Equal(dir+"1", dir+"2", dir+"3"),
 		)
 	})
 }
 
 func TestRemove(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
-
 	t.Run("Remove", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
-
-		fd, err := s3fs.Create(file, nil)
-		it.Then(t).Must(it.Nil(err))
-		fd.Write([]byte(content))
-		fd.Close()
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
 
 		err = s3fs.Remove(file)
 		it.Then(t).Must(it.Nil(err))
 	})
 
 	t.Run("Remove/Error", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -289,7 +309,7 @@ func TestRemove(t *testing.T) {
 	})
 
 	t.Run("Remove/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -301,19 +321,14 @@ func TestRemove(t *testing.T) {
 }
 
 func TestCopy(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
-
 	t.Run("Copy", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
 
-		fd, err := s3fs.Create(file, nil)
-		it.Then(t).Must(it.Nil(err))
-		fd.Write([]byte(content))
-		fd.Close()
-
-		err = s3fs.Copy(file, filepath.Join(root, "test/file"))
+		err = s3fs.Copy(file, filepath.Join(s3fs.Root, "test/file"))
 		it.Then(t).Must(it.Nil(err))
 	})
 
@@ -329,7 +344,7 @@ func TestCopy(t *testing.T) {
 	// })
 
 	t.Run("Copy/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -340,7 +355,7 @@ func TestCopy(t *testing.T) {
 	})
 
 	t.Run("Copy/Error/InvalidSchema", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -352,24 +367,20 @@ func TestCopy(t *testing.T) {
 }
 
 func TestWait(t *testing.T) {
-	root, err := os.MkdirTemp("", "")
-	it.Then(t).Should(it.Nil(err))
 
 	t.Run("Wait", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
-		it.Then(t).Must(it.Nil(err))
-
-		fd, err := s3fs.Create(file, nil)
-		it.Then(t).Must(it.Nil(err))
-		fd.Write([]byte(content))
-		fd.Close()
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
 
 		err = s3fs.Wait(file, 5*time.Second)
 		it.Then(t).Must(it.Nil(err))
 	})
 
 	t.Run("Wait/Error/InvalidPath", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -380,7 +391,7 @@ func TestWait(t *testing.T) {
 	})
 
 	t.Run("Wait/Error/Timeout", func(t *testing.T) {
-		s3fs, err := lfs.New(root)
+		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
@@ -389,4 +400,117 @@ func TestWait(t *testing.T) {
 			}),
 		)
 	})
+}
+
+func TestStat(t *testing.T) {
+	t.Run("Stat", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
+
+		fi, err := s3fs.Stat(file)
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(
+			it.Equal(fi.Name(), filepath.Base(file)),
+			it.Equal(fi.Size(), size),
+			it.Equal(fi.IsDir(), false),
+			it.Equal(fi.Mode(), 0644),
+		)
+	})
+
+	t.Run("Stat/Error", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Stat(file)),
+		)
+	})
+
+	t.Run("Stat/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Error(s3fs.Stat("invalid..key/")),
+		)
+	})
+
+	t.Run("Stat/Error/NotFound", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		_, err = s3fs.Stat(file)
+		it.Then(t).Should(
+			it.True(errors.Is(err, fs.ErrNotExist)),
+		)
+	})
+
+	t.Run("File/Stat", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(
+			it.Equal(fi.Name(), filepath.Base(file)),
+			it.Equal(fi.Size(), size),
+			it.Equal(fi.IsDir(), false),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("File/Stat.Read", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+		)
+
+		fd, err := s3fs.Open(file)
+		it.Then(t).Must(it.Nil(err))
+
+		_, err = io.ReadAll(fd)
+		it.Then(t).Must(it.Nil(err))
+
+		fi, err := fd.Stat()
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(
+			it.Equal(fi.Name(), filepath.Base(file)),
+			it.Equal(fi.Size(), size),
+			it.Equal(fi.IsDir(), false),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+	})
+}
+
+func createFile(fsys *lfs.FileSystem) error {
+	fd, err := fsys.Create(file, nil)
+	if err != nil {
+		return err
+	}
+
+	_, err = fd.Write([]byte(content))
+	if err != nil {
+		return err
+	}
+
+	err = fd.Close()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -23,7 +23,7 @@ import (
 
 type FileSystem struct {
 	fs   fs.StatFS
-	root string
+	Root string
 }
 
 var (
@@ -51,8 +51,18 @@ func New(root string) (*FileSystem, error) {
 
 	return &FileSystem{
 		fs:   f.(fs.StatFS),
-		root: root,
+		Root: root,
 	}, nil
+}
+
+// Create temp file system
+func NewTempFS(root string, pattern string) (*FileSystem, error) {
+	dir, err := os.MkdirTemp(root, pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	return New(dir)
 }
 
 // To open the file for writing use `Create` function giving the absolute path
@@ -63,7 +73,7 @@ func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error)
 		return nil, err
 	}
 
-	file := filepath.Join(fsys.root, path)
+	file := filepath.Join(fsys.Root, path)
 
 	if err := os.MkdirAll(filepath.Dir(file), 0755); err != nil {
 		return nil, err
@@ -74,14 +84,12 @@ func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error)
 
 // To open the file for reading use `Open` function giving the absolute path
 // starting with `/`, the returned file descriptor is a composite of
-// `io.Reader`, `io.Closer` and `stream.Stat`. Utilize Golang's convenient
-// streaming methods to consume S3 object seamlessly.
+// `io.Reader`, `io.Closer` and `stream.Stat`.
 func (fsys *FileSystem) Open(path string) (fs.File, error) {
 	if err := stream.RequireValidPath("open", path); err != nil {
 		return nil, err
 	}
 	return fsys.fs.Open(strings.Trim(path, "/"))
-
 }
 
 // Stat returns a FileInfo describing the file.
@@ -152,7 +160,7 @@ func (fsys *FileSystem) Remove(path string) error {
 		return err
 	}
 
-	file := filepath.Join(fsys.root, path)
+	file := filepath.Join(fsys.Root, path)
 
 	return os.Remove(file)
 }
