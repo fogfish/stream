@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/fogfish/it/v2"
 	"github.com/fogfish/stream/lfs"
@@ -345,6 +346,46 @@ func TestCopy(t *testing.T) {
 		it.Then(t).Should(
 			it.Fail(func() error {
 				return s3fs.Copy(file, file)
+			}),
+		)
+	})
+}
+
+func TestWait(t *testing.T) {
+	root, err := os.MkdirTemp("", "")
+	it.Then(t).Should(it.Nil(err))
+
+	t.Run("Wait", func(t *testing.T) {
+		s3fs, err := lfs.New(root)
+		it.Then(t).Must(it.Nil(err))
+
+		fd, err := s3fs.Create(file, nil)
+		it.Then(t).Must(it.Nil(err))
+		fd.Write([]byte(content))
+		fd.Close()
+
+		err = s3fs.Wait(file, 5*time.Second)
+		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("Wait/Error/InvalidPath", func(t *testing.T) {
+		s3fs, err := lfs.New(root)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Wait("invalid..key/", 5*time.Second)
+			}),
+		)
+	})
+
+	t.Run("Wait/Error/Timeout", func(t *testing.T) {
+		s3fs, err := lfs.New(root)
+		it.Then(t).Should(it.Nil(err))
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Wait(file, 0*time.Second)
 			}),
 		)
 	})

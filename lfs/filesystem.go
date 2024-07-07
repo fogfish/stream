@@ -218,7 +218,7 @@ func (fsys *FileSystem) Wait(path string, timeout time.Duration) error {
 			}
 		}
 
-		_, err := os.Stat(path[1:])
+		_, err := fsys.Stat(path)
 		switch {
 		case err == nil:
 			return nil
