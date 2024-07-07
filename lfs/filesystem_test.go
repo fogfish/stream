@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -407,6 +408,28 @@ func TestWait(t *testing.T) {
 
 		err = s3fs.Wait(file, 5*time.Second)
 		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("Wait/Created", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+		)
+
+		var exx error
+		wg := sync.WaitGroup{}
+
+		wg.Add(1)
+		go func() {
+			exx = s3fs.Wait(file, 5*time.Second)
+			wg.Done()
+		}()
+
+		time.Sleep(1 * time.Second)
+		createFile(s3fs)
+		wg.Wait()
+
+		it.Then(t).Must(it.Nil(exx))
 	})
 
 	t.Run("Wait/Error/InvalidPath", func(t *testing.T) {
