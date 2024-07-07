@@ -204,11 +204,7 @@ func (fsys *FileSystem) Copy(source, target string) (err error) {
 	defer func() { err = w.Close() }()
 
 	if _, err := io.Copy(w, r); err != nil {
-		return &fs.PathError{
-			Op:   "copy",
-			Path: target,
-			Err:  err,
-		}
+		return &fs.PathError{Op: "copy", Path: target, Err: err}
 	}
 
 	return nil

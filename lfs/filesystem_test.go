@@ -398,7 +398,6 @@ func TestCopy(t *testing.T) {
 }
 
 func TestWait(t *testing.T) {
-
 	t.Run("Wait", func(t *testing.T) {
 		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Must(
