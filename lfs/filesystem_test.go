@@ -348,16 +348,31 @@ func TestCopy(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
-	// t.Run("Copy/Error", func(t *testing.T) {
-	// 	s3fs, err := lfs.New(root)
-	// 	it.Then(t).Should(it.Nil(err))
+	t.Run("Copy/Error/Source", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
 
-	// 	it.Then(t).Should(
-	// 		it.Fail(func() error {
-	// 			return s3fs.Copy(file, "s3://test/file")
-	// 		}),
-	// 	)
-	// })
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Copy(file, filepath.Join(s3fs.Root, "test/file"))
+			}),
+		)
+	})
+
+	t.Run("Copy/Error/Target", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Nil(createFile(s3fs)),
+			it.Nil(os.MkdirAll(filepath.Join(s3fs.Root, "the/file"), 0755)),
+		)
+
+		it.Then(t).Should(
+			it.Fail(func() error {
+				return s3fs.Copy(file, filepath.Join(s3fs.Root, "the/file"))
+			}),
+		)
+	})
 
 	t.Run("Copy/Error/InvalidPath", func(t *testing.T) {
 		s3fs, err := lfs.NewTempFS("", "lfs")
