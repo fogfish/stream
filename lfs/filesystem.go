@@ -105,7 +105,7 @@ func (fsys *FileSystem) Open(path string) (fs.File, error) {
 	if err := stream.RequireValidPath("open", path); err != nil {
 		return nil, err
 	}
-	return fsys.fs.Open(strings.Trim(path, "/"))
+	return fsys.fs.Open(trim(path))
 }
 
 // Stat returns a FileInfo describing the file.
@@ -113,7 +113,7 @@ func (fsys *FileSystem) Stat(path string) (fs.FileInfo, error) {
 	if err := stream.RequireValidPath("stat", path); err != nil {
 		return nil, err
 	}
-	return fsys.fs.Stat(strings.Trim(path, "/"))
+	return fsys.fs.Stat(trim(path))
 }
 
 // Reads the named directory or path prefix.
@@ -127,7 +127,7 @@ func (fsys *FileSystem) ReadDir(path string) ([]fs.DirEntry, error) {
 	}
 
 	if f, ok := fsys.fs.(fs.ReadDirFS); ok {
-		return f.ReadDir(strings.Trim(path, "/"))
+		return f.ReadDir(trim(path))
 	}
 
 	return nil, fmt.Errorf("invalid os.DirFS configuration")
@@ -236,4 +236,11 @@ func (fsys *FileSystem) Wait(path string, timeout time.Duration) error {
 
 		time.Sleep(2 * time.Second)
 	}
+}
+
+func trim(path string) string {
+	if path == "/" {
+		return "."
+	}
+	return strings.Trim(path, "/")
 }

@@ -33,6 +33,10 @@ func RequireValidFile(ctx, path string) error {
 
 // The file system requires absolute path starting from "/"
 func IsValidPath(path string) bool {
+	if path == "/" {
+		return true
+	}
+
 	if len(path) != 0 && path[len(path)-1] == '/' {
 		path = path[:len(path)-1]
 	}
@@ -59,6 +63,10 @@ func RequireValidPath(ctx, path string) error {
 
 // The file system emulates "dirs" as any valid path ending with "/"
 func IsValidDir(path string) bool {
+	if path == "/" {
+		return true
+	}
+
 	if len(path) == 0 || path[0] != '/' || path[len(path)-1] != '/' {
 		return false
 	}
