@@ -300,6 +300,46 @@ func TestWalk(t *testing.T) {
 			it.Seq(seq).Equal(dir+"1", dir+"2", dir+"3"),
 		)
 	})
+
+	t.Run("WalkDir/Root", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Must(
+			it.Nil(err),
+		)
+		it.Then(t).ShouldNot(
+			it.Error(os.Create(filepath.Join(s3fs.Root, "1"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, "2"))),
+			it.Error(os.Create(filepath.Join(s3fs.Root, "3"))),
+		)
+
+		seq := make([]string, 0)
+		err = fs.WalkDir(s3fs, "/", func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				return nil
+			}
+
+			it.Then(t).
+				ShouldNot(
+					it.Error(d.Info()),
+				).
+				Should(
+					it.Nil(err),
+					it.Equal(d.Type(), 0),
+				)
+
+			seq = append(seq, path)
+			return nil
+		})
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(
+			it.Seq(seq).Equal("/1", "/2", "/3"),
+		)
+	})
+
 }
 
 func TestRemove(t *testing.T) {
