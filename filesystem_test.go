@@ -31,7 +31,6 @@ var (
 	dir          = file + "/"
 	presignedUrl = "https://example.com" + file
 	content      = "Hello World!"
-	uploadID     = "mock-upload-id"
 	size         = int64(len(content))
 	modified     = time.Date(2024, 05, 11, 18, 04, 30, 0, time.UTC)
 	expires      = time.Date(2025, 05, 11, 18, 04, 30, 0, time.UTC)
@@ -123,7 +122,6 @@ var (
 		Mock: mocks.Mock[manager.UploadOutput]{
 			ExpectKey: file[1:],
 			ExpectVal: content,
-			ReturnVal: &manager.UploadOutput{UploadID: uploadID},
 		},
 	}
 
