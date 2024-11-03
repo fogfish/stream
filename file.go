@@ -183,7 +183,7 @@ type writer[T any] struct {
 	w      *io.PipeWriter
 	r      *io.PipeReader
 	wg     sync.WaitGroup
-	upload string
+	cancel context.CancelFunc
 	err    error
 }
 
@@ -221,16 +221,15 @@ func (fd *writer[T]) lazyOpen() {
 		}
 		fd.fs.codec.EncodePutInput(fd.attr, req)
 
-		if val, err := fd.fs.upload.Upload(ctx, req); err != nil {
+		fd.cancel = cancel
+		if _, err := fd.fs.upload.Upload(ctx, req); err != nil {
 			fd.err = &fs.PathError{
 				Op:   "write",
 				Path: fd.path,
 				Err:  err,
 			}
-			fd.r.Close()
-		} else {
-			fd.upload = val.UploadID
 		}
+		fd.r.Close()
 	}()
 }
 
@@ -310,16 +309,6 @@ func (fd *writer[T]) Stat() (fs.FileInfo, error) {
 
 // Cancel effect of file i/o
 func (fd *writer[T]) Cancel() error {
-	_, err := fd.fs.api.AbortMultipartUpload(context.Background(),
-		&s3.AbortMultipartUploadInput{
-			Bucket:   aws.String(fd.fs.bucket),
-			Key:      fd.s3Key(),
-			UploadId: aws.String(fd.upload),
-		},
-	)
-	if err != nil {
-		return err
-	}
-
+	fd.cancel()
 	return nil
 }

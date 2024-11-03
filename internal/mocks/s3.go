@@ -163,10 +163,6 @@ func (mock PutObject) Upload(ctx context.Context, input *s3.PutObjectInput, opts
 	return mock.ReturnVal, nil
 }
 
-func (mock PutObject) AbortMultipartUpload(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
-	return nil, nil
-}
-
 //
 
 type PresignGetObject struct{ Mock[v4.PresignedHTTPRequest] }
