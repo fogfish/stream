@@ -24,11 +24,17 @@ type Stat interface {
 	Stat() (fs.FileInfo, error)
 }
 
+// Cancel effect of file system i/o, before file is closed.
+type Canceler interface {
+	Cancel() error
+}
+
 // File is a writable object
 type File interface {
 	Stat
 	io.Writer
 	io.Closer
+	Canceler
 }
 
 // File System extension supporting writable files

@@ -278,6 +278,26 @@ func TestReadWrite(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
+	t.Run("File/Write/Cancel", func(t *testing.T) {
+		s3fs, err := stream.NewFS("test",
+			stream.WithS3(s3PutObject),
+			stream.WithS3Upload(s3PutObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fd, err := s3fs.Create(file, nil)
+		it.Then(t).Must(it.Nil(err))
+
+		n, err := io.WriteString(fd, content)
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Equal(n, len(content)),
+		)
+
+		err = fd.Cancel()
+		it.Then(t).Must(it.Nil(err))
+	})
+
 	t.Run("File/Read/Error/InvalidPath", func(t *testing.T) {
 		s3fs, err := stream.NewFS("test",
 			stream.WithS3(s3GetObject),
