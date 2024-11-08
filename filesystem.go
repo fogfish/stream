@@ -16,32 +16,22 @@ package stream
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/fogfish/opts"
 )
-
-// File System Configuration Options
-type Opts struct {
-	api          S3
-	upload       S3Upload
-	signer       S3Signer
-	timeout      time.Duration
-	ttlSignedUrl time.Duration
-	lslimit      int32
-}
 
 // File System
 type FileSystem[T any] struct {
 	Opts
-	codec  *codec[T]
 	bucket string
+	codec  *codec[T]
 }
 
 var (
@@ -56,37 +46,28 @@ var (
 
 // Create a file system instance, mounting S3 Bucket. Use Option type to
 // configure file system.
-func New[T any](bucket string, opts ...Option) (*FileSystem[T], error) {
-	fsys := &FileSystem[T]{
-		Opts: Opts{
-			timeout:      120 * time.Second,
-			ttlSignedUrl: 5 * time.Minute,
-			lslimit:      1000,
-		},
+func New[T any](bucket string, opt ...Option) (*FileSystem[T], error) {
+	if len(bucket) == 0 {
+		return nil, fmt.Errorf("bucket is not defined")
+	}
+
+	fsys := FileSystem[T]{
+		Opts:   optsDefault(),
 		bucket: bucket,
 		codec:  newCodec[T](),
 	}
 
-	for _, opt := range opts {
-		opt(&fsys.Opts)
+	if err := opts.Apply(&fsys.Opts, opt); err != nil {
+		return nil, err
 	}
 
 	if fsys.api == nil {
-		aws, err := config.LoadDefaultConfig(context.Background())
-		if err != nil {
+		if err := optsDefaultS3(&fsys.Opts); err != nil {
 			return nil, err
-		}
-		api := s3.NewFromConfig(aws)
-
-		fsys.api = api
-		fsys.upload = manager.NewUploader(api)
-
-		if fsys.codec.s != nil && fsys.signer == nil {
-			fsys.signer = s3.NewPresignClient(api)
 		}
 	}
 
-	return fsys, nil
+	return &fsys, fsys.checkRequired()
 }
 
 // Create a file system instance, mounting S3 Bucket. Use Option type to
