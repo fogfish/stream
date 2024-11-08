@@ -36,7 +36,7 @@ var (
 	_ stream.CopyFS             = (*FileSystem)(nil)
 )
 
-// Create local file system instance, mounting S3 Bucket.
+// Create local file system instance, mounting dir.
 // It uses os.DirFS under the hood, making it compatible with streams extensions
 func New(root string) (*FileSystem, error) {
 	_, err := os.Stat(root)
