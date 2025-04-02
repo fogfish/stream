@@ -49,7 +49,7 @@ func walk() error {
 	})
 }
 
-func read(s3fs *stream.FileSystem[struct{}], path string) error {
+func read(s3fs fs.FS, path string) error {
 	fd, err := s3fs.Open(path)
 	if err != nil {
 		return err

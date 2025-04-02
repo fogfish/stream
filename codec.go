@@ -70,6 +70,7 @@ func isomorphism[T, S any]() optics.Isomorphism[T, S] {
 		case "StorageClass":
 			iso = append(iso, codecStorageClass(ts, sq, "StorageClass"))
 		case "PreSignedUrl":
+		case "SystemMetadata":
 		default:
 			iso = append(iso, codecMetadata(t, sq))
 		}
