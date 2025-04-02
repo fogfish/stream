@@ -14,7 +14,7 @@
     </a>
     <!-- Build Status  -->
     <a href="https://github.com/fogfish/stream/actions/">
-      <img src="https://github.com/fogfish/stream/workflows/test/badge.svg" />
+      <img src="https://github.com/fogfish/stream/workflows/build/badge.svg" />
     </a>
     <!-- GitHub -->
     <a href="http://github.com/fogfish/stream">

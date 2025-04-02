@@ -30,7 +30,7 @@ type Canceler interface {
 }
 
 // File is a writable object
-type File interface {
+type File = interface {
 	Stat
 	io.Writer
 	io.Closer
