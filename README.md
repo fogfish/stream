@@ -85,6 +85,7 @@ go get -u github.com/fogfish/stream
   - [Presigned Urls](#presigned-urls)
   - [Error handling](#error-handling)
   - [Local file system](#local-file-system)
+  - [Spool - File System Queue](#spool---file-system-queue)
 - [How To Contribute](#how-to-contribute)
   - [commit message](#commit-message)
   - [bugs](#bugs)
@@ -340,6 +341,14 @@ The library implements compatible wrapper of `os.DirFS` to enhance functionality
 import "github.com/fogfish/stream/lfs"
 
 fs, err := lfs.New("/path/to/root")
+```
+
+### Spool - File System Queue
+
+The library implements a convinient utility to implement Linux-like `spool` over the mounted file systems. The spooling is transparently done either over local file system or AWS S3. 
+
+```go
+
 ```
 
 ## How To Contribute

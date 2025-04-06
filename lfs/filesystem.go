@@ -101,7 +101,7 @@ func (fsys *FileSystem) osCreate(ctx, path string) (stream.File, error) {
 type nopCanceler struct{ *os.File }
 
 // Cancel effect of file i/o
-func (nopCanceler) Cancel() error { return fmt.Errorf("not supported") }
+func (f nopCanceler) Cancel() error { return f.Close() }
 
 // To open the file for reading use `Open` function giving the absolute path
 // starting with `/`, the returned file descriptor is a composite of
