@@ -348,7 +348,17 @@ fs, err := lfs.New("/path/to/root")
 The library implements a convinient utility to implement Linux-like `spool` over the mounted file systems. The spooling is transparently done either over local file system or AWS S3. 
 
 ```go
+import "github.com/fogfish/stream/spool"
 
+s, err := lfs.New("/path/to/source")
+t, err := lfs.New("/path/to/target")
+
+q := spool.New(s, t, spool.Mutable)
+q.ForEachFile(context.Background(), "/",
+  func(ctx context.Context, path string, b []byte) ([]byte, error) {
+    return b, nil
+  },
+)
 ```
 
 ## How To Contribute
