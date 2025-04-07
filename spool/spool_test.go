@@ -18,7 +18,7 @@ import (
 	"github.com/fogfish/stream/spool"
 )
 
-func TestSpool(t *testing.T) {
+func TestSpoolForEach(t *testing.T) {
 	in, err := lfs.NewTempFS(os.TempDir(), "in")
 	it.Then(t).Must(it.Nil(err))
 
@@ -38,6 +38,34 @@ func TestSpool(t *testing.T) {
 		func(ctx context.Context, path string, b []byte) ([]byte, error) {
 			dat = append(dat, path)
 			return b, nil
+		},
+	)
+
+	it.Then(t).Should(
+		it.Seq(seq).Equal(dat...),
+	)
+}
+
+func TestSpoolPartition(t *testing.T) {
+	in, err := lfs.NewTempFS(os.TempDir(), "in")
+	it.Then(t).Must(it.Nil(err))
+
+	to, err := lfs.NewTempFS(os.TempDir(), "to")
+	it.Then(t).Must(it.Nil(err))
+
+	qq := spool.New(in, to)
+
+	seq := []string{"/a", "/b", "/c", "/d", "/e", "/f"}
+	for _, txt := range seq {
+		err := qq.WriteFile(txt, []byte(txt))
+		it.Then(t).Must(it.Nil(err))
+	}
+
+	dat := []string{}
+	qq.PartitionFile(context.Background(), "/",
+		func(ctx context.Context, path string, b []byte) (string, error) {
+			dat = append(dat, path)
+			return path, nil
 		},
 	)
 

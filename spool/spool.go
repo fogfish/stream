@@ -13,6 +13,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"path/filepath"
 
 	"github.com/fogfish/opts"
 	"github.com/fogfish/stream"
@@ -168,6 +169,82 @@ func (spool *Spool) ForEachFile(
 			}
 
 			return io.NopCloser(bytes.NewBuffer(b)), nil
+		},
+	)
+}
+
+// Apply the parition function over each file in the reader filesystem, producing
+// results to writer file system.
+func (spool *Spool) Partition(
+	ctx context.Context,
+	dir string,
+	f func(context.Context, string, io.Reader) (string, error),
+) error {
+	return fs.WalkDir(spool.reader, dir,
+		func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if d.IsDir() {
+				return nil
+			}
+
+			fd, err := spool.reader.Open(path)
+			if err != nil {
+				return spool.iserr(err)
+			}
+			defer fd.Close()
+
+			shard, err := f(ctx, path, fd)
+			if err != nil {
+				return spool.iserr(err)
+			}
+			if len(shard) == 0 {
+				return nil
+			}
+
+			cp, err := spool.reader.Open(path)
+			if err != nil {
+				return spool.iserr(err)
+			}
+			defer cp.Close()
+
+			err = spool.write(spool.writer, filepath.Join("/", shard, path), cp)
+			if err != nil {
+				return spool.iserr(err)
+			}
+
+			if spool.mutable == mutable {
+				err = spool.reader.Remove(path)
+				if err != nil {
+					return spool.iserr(err)
+				}
+			}
+
+			return nil
+		},
+	)
+}
+
+func (spool *Spool) PartitionFile(
+	ctx context.Context,
+	dir string,
+	f func(context.Context, string, []byte) (string, error),
+) error {
+	return spool.Partition(ctx, dir,
+		func(ctx context.Context, path string, r io.Reader) (string, error) {
+			in, err := io.ReadAll(r)
+			if err != nil {
+				return "", err
+			}
+
+			shard, err := f(ctx, path, in)
+			if err != nil {
+				return "", err
+			}
+
+			return shard, nil
 		},
 	)
 }
