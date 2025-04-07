@@ -11,6 +11,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"io/fs"
 
@@ -63,7 +64,7 @@ func (dd *dd[T]) readAll() ([]fs.DirEntry, error) {
 	req := &s3.ListObjectsV2Input{
 		Bucket:  aws.String(dd.fs.bucket),
 		MaxKeys: aws.Int32(dd.fs.lslimit),
-		Prefix:  dd.s3Key(),
+		Prefix:  dd.s3Key(dd.fs.root),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), dd.fs.timeout)
@@ -80,7 +81,9 @@ func (dd *dd[T]) readAll() ([]fs.DirEntry, error) {
 		}
 
 		for _, el := range val.Contents {
-			seq = append(seq, dd.objectToDirEntry(el))
+			if !strings.HasSuffix(*el.Key, "/") {
+				seq = append(seq, dd.objectToDirEntry(el))
+			}
 		}
 
 		cnt := int(aws.ToInt32(val.KeyCount))
@@ -97,7 +100,7 @@ func (dd *dd[T]) objectToDirEntry(t types.Object) fs.DirEntry {
 	//       It is assumed by fs.FS implementations (e.g. WalkDir) and also requires
 	//       Name to be basename. It is not convenient for S3 where file system is flat.
 	path := aws.ToString(t.Key)
-	path = path[len(dd.path)-1:]
+	path = path[len(dd.fs.root+dd.path)-1:]
 
 	// ETag
 	// ObjectStorageClass

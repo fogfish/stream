@@ -213,15 +213,17 @@ var (
 )
 
 func TestNew(t *testing.T) {
-	s3fs, err := stream.NewFS("test",
-		stream.WithS3(s3GetObject),
-		stream.WithS3Upload(s3PutObject),
-		stream.WithS3Signer(s3PresignGetObject),
-		stream.WithIOTimeout(5*time.Second),
-		stream.WithPreSignUrlTTL(20*time.Second),
-		stream.WithListingLimit(1000),
-	)
-	it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
+	for _, mnt := range []string{"test", "test/a", "test/a/b"} {
+		s3fs, err := stream.NewFS(mnt,
+			stream.WithS3(s3GetObject),
+			stream.WithS3Upload(s3PutObject),
+			stream.WithS3Signer(s3PresignGetObject),
+			stream.WithIOTimeout(5*time.Second),
+			stream.WithPreSignUrlTTL(20*time.Second),
+			stream.WithListingLimit(1000),
+		)
+		it.Then(t).Should(it.Nil(err)).ShouldNot(it.Nil(s3fs))
+	}
 }
 
 func TestReadWrite(t *testing.T) {

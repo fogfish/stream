@@ -44,14 +44,15 @@ func (f info[T]) Sys() any                   { return f.attr }
 func (f info[T]) Type() fs.FileMode          { return f.mode.Type() }
 func (f info[T]) Info() (fs.FileInfo, error) { return f, nil }
 
-func (f info[T]) s3Key() *string { return s3Key(f.path) }
+func (f info[T]) s3Key(root string) *string { return s3Key(root, f.path) }
 
-func s3Key(path string) *string {
-	if path[0] == '/' {
-		return aws.String(path[1:])
+func s3Key(root, path string) *string {
+	file := root + path
+	if file[0] == '/' {
+		return aws.String(file[1:])
 	}
 
-	return aws.String(path)
+	return aws.String(file)
 }
 
 //------------------------------------------------------------------------------
@@ -107,7 +108,7 @@ func (fd *reader[T]) Stat() (fs.FileInfo, error) {
 func (fd *reader[T]) lazyOpen() error {
 	req := &s3.GetObjectInput{
 		Bucket: aws.String(fd.fs.bucket),
-		Key:    fd.s3Key(),
+		Key:    fd.s3Key(fd.fs.root),
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), fd.fs.timeout)
@@ -136,7 +137,7 @@ func (fd *reader[T]) lazyOpen() error {
 
 	fd.fs.codec.DecodeGetOutput(val, fd.info.attr)
 	if fd.fs.signer != nil && fd.fs.codec.s != nil {
-		if url, err := fd.fs.preSignGetUrl(fd.s3Key()); err == nil {
+		if url, err := fd.fs.preSignGetUrl(fd.s3Key(fd.fs.root)); err == nil {
 			fd.fs.codec.s.Put(fd.info.attr, url)
 		}
 	}
@@ -215,7 +216,7 @@ func (fd *writer[T]) lazyOpen() {
 
 		req := &s3.PutObjectInput{
 			Bucket:   aws.String(fd.fs.bucket),
-			Key:      fd.s3Key(),
+			Key:      fd.s3Key(fd.fs.root),
 			Body:     fd.r,
 			Metadata: make(map[string]string),
 		}
@@ -239,7 +240,7 @@ func (fd *writer[T]) preSignPutUrl() (string, error) {
 
 	req := &s3.PutObjectInput{
 		Bucket:   aws.String(fd.fs.bucket),
-		Key:      fd.s3Key(),
+		Key:      fd.s3Key(fd.fs.root),
 		Metadata: make(map[string]string),
 	}
 	fd.fs.codec.EncodePutInput(fd.attr, req)

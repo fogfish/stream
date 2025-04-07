@@ -13,8 +13,8 @@ import (
 	"context"
 	"io"
 	"io/fs"
-	"log/slog"
 
+	"github.com/fogfish/opts"
 	"github.com/fogfish/stream"
 )
 
@@ -36,24 +36,47 @@ type File = interface {
 }
 
 const (
+	immutable = iota
+	mutable
+)
+
+const (
+	strict = iota
+	skiperror
+)
+
+var (
+	withMutability = opts.ForName[Spool, int]("mutable")
+
 	// spool is immutable, consumed tasks remains in spool.
-	Immutable = iota
+	IsImmutable = withMutability(immutable)
 	// spool is mutable, consumed tasks are removed
-	Mutable
+	IsMutable = withMutability(mutable)
+
+	withStrict = opts.ForName[Spool, int]("strict")
+
+	// spool fails on error
+	WithStrict = withStrict(strict)
+	// spool skips error, continue as warning
+	WithSkipError = withStrict(skiperror)
 )
 
 type Spool struct {
-	reader FileSystem
-	writer FileSystem
-	mode   int
+	reader  FileSystem
+	writer  FileSystem
+	mutable int
+	strict  int
 }
 
-func New(reader, writer FileSystem, mode int) *Spool {
-	return &Spool{
+func New(reader, writer FileSystem, opt ...opts.Option[Spool]) *Spool {
+	s := &Spool{
 		reader: reader,
 		writer: writer,
-		mode:   mode,
 	}
+
+	opts.Apply(s, opt)
+
+	return s
 }
 
 // Write new file to spool
@@ -63,6 +86,14 @@ func (spool *Spool) Write(path string, r io.Reader) error {
 
 func (spool *Spool) WriteFile(path string, b []byte) error {
 	return spool.Write(path, bytes.NewBuffer(b))
+}
+
+func (spool *Spool) iserr(err error) error {
+	if spool.strict == skiperror {
+		return nil
+	}
+
+	return err
 }
 
 // Apply the spool function over each file in the reader filesystem, producing
@@ -84,13 +115,13 @@ func (spool *Spool) ForEach(
 
 			fd, err := spool.reader.Open(path)
 			if err != nil {
-				return err
+				return spool.iserr(err)
 			}
 			defer fd.Close()
 
 			dd, err := f(ctx, path, fd)
 			if err != nil {
-				return err
+				return spool.iserr(err)
 			}
 			if dd == nil {
 				return nil
@@ -99,13 +130,13 @@ func (spool *Spool) ForEach(
 
 			err = spool.write(spool.writer, path, dd)
 			if err != nil {
-				return err
+				return spool.iserr(err)
 			}
 
-			if spool.mode == Mutable {
+			if spool.mutable == mutable {
 				err = spool.reader.Remove(path)
 				if err != nil {
-					slog.Warn("unable to remove the file", "err", err)
+					return spool.iserr(err)
 				}
 			}
 

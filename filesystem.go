@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ import (
 type FileSystem[T any] struct {
 	Opts
 	bucket string
+	root   string
 	codec  *codec[T]
 }
 
@@ -52,9 +54,14 @@ func New[T any](bucket string, opt ...Option) (*FileSystem[T], error) {
 	}
 
 	fsys := FileSystem[T]{
-		Opts:   optsDefault(),
-		bucket: bucket,
-		codec:  newCodec[T](),
+		Opts:  optsDefault(),
+		codec: newCodec[T](),
+	}
+
+	seq := strings.SplitN(bucket, "/", 2)
+	fsys.bucket, fsys.root = seq[0], ""
+	if len(seq) > 1 {
+		fsys.root = filepath.Join("/", seq[1])
 	}
 
 	if err := opts.Apply(&fsys.Opts, opt); err != nil {
@@ -126,7 +133,7 @@ func (fsys *FileSystem[T]) Stat(path string) (fs.FileInfo, error) {
 
 	req := &s3.HeadObjectInput{
 		Bucket: aws.String(fsys.bucket),
-		Key:    info.s3Key(),
+		Key:    info.s3Key(fsys.root),
 	}
 
 	val, err := fsys.api.HeadObject(ctx, req)
@@ -149,7 +156,7 @@ func (fsys *FileSystem[T]) Stat(path string) (fs.FileInfo, error) {
 	fsys.codec.DecodeHeadOutput(val, info.attr)
 
 	if fsys.signer != nil && fsys.codec.s != nil {
-		if url, err := fsys.preSignGetUrl(info.s3Key()); err == nil {
+		if url, err := fsys.preSignGetUrl(info.s3Key(fsys.root)); err == nil {
 			fsys.codec.s.Put(info.attr, url)
 		}
 	}
@@ -255,7 +262,7 @@ func (fsys *FileSystem[T]) Remove(path string) error {
 
 	req := &s3.DeleteObjectInput{
 		Bucket: &fsys.bucket,
-		Key:    s3Key(path),
+		Key:    s3Key(fsys.root, path),
 	}
 
 	_, err := fsys.api.DeleteObject(ctx, req)
@@ -290,7 +297,7 @@ func (fsys *FileSystem[T]) Copy(source, target string) error {
 
 	req := &s3.CopyObjectInput{
 		Bucket:     &fsys.bucket,
-		Key:        s3Key(source),
+		Key:        s3Key(fsys.root, source),
 		CopySource: aws.String(target[5:]),
 	}
 
@@ -316,7 +323,7 @@ func (fsys *FileSystem[T]) Wait(path string, timeout time.Duration) error {
 
 	req := &s3.HeadObjectInput{
 		Bucket: aws.String(fsys.bucket),
-		Key:    s3Key(path),
+		Key:    s3Key(fsys.root, path),
 	}
 
 	err := waiter.Wait(context.Background(), req, timeout)
