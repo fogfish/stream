@@ -25,7 +25,7 @@ func TestSpool(t *testing.T) {
 	to, err := lfs.NewTempFS(os.TempDir(), "to")
 	it.Then(t).Must(it.Nil(err))
 
-	qq := spool.New(in, to, spool.Mutable)
+	qq := spool.New(in, to)
 
 	seq := []string{"/a", "/b", "/c", "/d", "/e", "/f"}
 	for _, txt := range seq {

@@ -52,7 +52,7 @@ func walk() error {
 func read(s3fs fs.FS, path string) error {
 	fd, err := s3fs.Open(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("open %s has failed %w", path, err)
 	}
 	defer fd.Close()
 
@@ -63,7 +63,7 @@ func read(s3fs fs.FS, path string) error {
 
 	fi, err := fd.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("stat %s has failed %w", path, err)
 	}
 
 	output(fi, buf)
