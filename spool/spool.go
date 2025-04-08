@@ -13,6 +13,7 @@ import (
 	"context"
 	"io"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
 
 	"github.com/fogfish/opts"
@@ -91,6 +92,7 @@ func (spool *Spool) WriteFile(path string, b []byte) error {
 
 func (spool *Spool) iserr(err error) error {
 	if spool.strict == skiperror {
+		slog.Warn(err.Error())
 		return nil
 	}
 
