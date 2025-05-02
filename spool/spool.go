@@ -63,6 +63,9 @@ var (
 	WithSkipError = withStrict(skiperror)
 )
 
+// Spool handler function
+type Spoolf = func(context.Context, string, io.Reader) (io.ReadCloser, error)
+
 type Spool struct {
 	reader  FileSystem
 	writer  FileSystem
@@ -81,13 +84,36 @@ func New(reader, writer FileSystem, opt ...opts.Option[Spool]) *Spool {
 	return s
 }
 
-// Write new file to spool
-func (spool *Spool) Write(path string, r io.Reader) error {
-	return spool.write(spool.reader, path, r)
-}
+// apply spool function over the file
+func (spool *Spool) apply(ctx context.Context, path string, f Spoolf) error {
+	fd, err := spool.reader.Open(path)
+	if err != nil {
+		return spool.iserr(err)
+	}
+	defer fd.Close()
 
-func (spool *Spool) WriteFile(path string, b []byte) error {
-	return spool.Write(path, bytes.NewBuffer(b))
+	dd, err := f(ctx, path, fd)
+	if err != nil {
+		return spool.iserr(err)
+	}
+	if dd == nil {
+		return nil
+	}
+	defer dd.Close()
+
+	err = spool.write(spool.writer, path, dd)
+	if err != nil {
+		return spool.iserr(err)
+	}
+
+	if spool.mutable == mutable {
+		err = spool.reader.Remove(path)
+		if err != nil {
+			return spool.iserr(err)
+		}
+	}
+
+	return nil
 }
 
 func (spool *Spool) iserr(err error) error {
@@ -99,13 +125,18 @@ func (spool *Spool) iserr(err error) error {
 	return err
 }
 
+// Write new file to spool
+func (spool *Spool) Write(path string, r io.Reader) error {
+	return spool.write(spool.reader, path, r)
+}
+
+func (spool *Spool) WriteFile(path string, b []byte) error {
+	return spool.Write(path, bytes.NewBuffer(b))
+}
+
 // Apply the spool function over each file in the reader filesystem, producing
 // results to writer file system.
-func (spool *Spool) ForEach(
-	ctx context.Context,
-	dir string,
-	f func(context.Context, string, io.Reader) (io.ReadCloser, error),
-) error {
+func (spool *Spool) ForEach(ctx context.Context, dir string, f Spoolf) error {
 	return fs.WalkDir(spool.reader, dir,
 		func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
@@ -116,36 +147,25 @@ func (spool *Spool) ForEach(
 				return nil
 			}
 
-			fd, err := spool.reader.Open(path)
-			if err != nil {
-				return spool.iserr(err)
-			}
-			defer fd.Close()
-
-			dd, err := f(ctx, path, fd)
-			if err != nil {
-				return spool.iserr(err)
-			}
-			if dd == nil {
-				return nil
-			}
-			defer dd.Close()
-
-			err = spool.write(spool.writer, path, dd)
-			if err != nil {
-				return spool.iserr(err)
-			}
-
-			if spool.mutable == mutable {
-				err = spool.reader.Remove(path)
-				if err != nil {
-					return spool.iserr(err)
-				}
+			if err := spool.apply(ctx, path, f); err != nil {
+				return err
 			}
 
 			return nil
 		},
 	)
+}
+
+// Apply the spool function over all file in the reader filesystem, producing
+// results to writer file system.
+func (spool *Spool) ForEachPath(ctx context.Context, paths []string, f Spoolf) error {
+	for _, path := range paths {
+		if err := spool.apply(ctx, path, f); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Apply the spool function over each file in the reader filesystem, producing
