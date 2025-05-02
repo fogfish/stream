@@ -10,6 +10,7 @@ package spool_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"testing"
 
@@ -38,6 +39,34 @@ func TestSpoolForEach(t *testing.T) {
 		func(ctx context.Context, path string, b []byte) ([]byte, error) {
 			dat = append(dat, path)
 			return b, nil
+		},
+	)
+
+	it.Then(t).Should(
+		it.Seq(seq).Equal(dat...),
+	)
+}
+
+func TestSpoolForEachPath(t *testing.T) {
+	in, err := lfs.NewTempFS(os.TempDir(), "in")
+	it.Then(t).Must(it.Nil(err))
+
+	to, err := lfs.NewTempFS(os.TempDir(), "to")
+	it.Then(t).Must(it.Nil(err))
+
+	qq := spool.New(in, to)
+
+	seq := []string{"/a", "/b", "/c", "/d", "/e", "/f"}
+	for _, txt := range seq {
+		err := qq.WriteFile(txt, []byte(txt))
+		it.Then(t).Must(it.Nil(err))
+	}
+
+	dat := []string{}
+	qq.ForEachPath(context.Background(), seq,
+		func(ctx context.Context, path string, r io.Reader) (io.ReadCloser, error) {
+			dat = append(dat, path)
+			return io.NopCloser(r), nil
 		},
 	)
 
