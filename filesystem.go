@@ -362,32 +362,32 @@ func (fsys *FileSystem[T]) Wait(path string, timeout time.Duration) error {
 	return nil
 }
 
-func (fsys *FileSystem[T]) PutUrl(path string, attr *T, ttl time.Duration) (string, error) {
+func (fsys *FileSystem[T]) PutFileUrl(path string, attr *T, ttl time.Duration) (string, error) {
 	if fsys.signer == nil {
 		return "", &fs.PathError{
-			Op:   "puturl",
+			Op:   "putfileurl",
 			Path: path,
 			Err:  errors.New("signer is not configured"),
 		}
 	}
 
-	if err := RequireValidPath("puturl", path); err != nil {
+	if err := RequireValidPath("putfileurl", path); err != nil {
 		return "", err
 	}
 
 	return fsys.preSignPutUrl(s3Key(fsys.root, path), attr, ttl)
 }
 
-func (fsys *FileSystem[T]) GetUrl(path string, ttl time.Duration) (string, error) {
+func (fsys *FileSystem[T]) GetFileUrl(path string, ttl time.Duration) (string, error) {
 	if fsys.signer == nil {
 		return "", &fs.PathError{
-			Op:   "geturl",
+			Op:   "getfileurl",
 			Path: path,
 			Err:  errors.New("signer is not configured"),
 		}
 	}
 
-	if err := RequireValidPath("geturl", path); err != nil {
+	if err := RequireValidPath("getfileurl", path); err != nil {
 		return "", err
 	}
 

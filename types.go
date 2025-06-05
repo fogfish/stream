@@ -59,8 +59,8 @@ type CopyFS interface {
 // File System extension supporting I/O operations via urls
 type CurlFS[T any] interface {
 	fs.FS
-	PutUrl(path string, attr *T, ttl time.Duration) (string, error)
-	GetUrl(path string, ttl time.Duration) (string, error)
+	PutFileUrl(path string, attr *T, ttl time.Duration) (string, error)
+	GetFileUrl(path string, ttl time.Duration) (string, error)
 }
 
 // well-known attributes controlled by S3 system
