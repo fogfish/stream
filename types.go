@@ -56,6 +56,13 @@ type CopyFS interface {
 	Wait(path string, timeout time.Duration) error
 }
 
+// File System extension supporting I/O operations via urls
+type CurlFS[T any] interface {
+	fs.FS
+	PutFileUrl(path string, attr *T, ttl time.Duration) (string, error)
+	GetFileUrl(path string, ttl time.Duration) (string, error)
+}
+
 // well-known attributes controlled by S3 system
 type SystemMetadata struct {
 	CacheControl    string

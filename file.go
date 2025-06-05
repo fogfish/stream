@@ -137,7 +137,7 @@ func (fd *reader[T]) lazyOpen() error {
 
 	fd.fs.codec.DecodeGetOutput(val, fd.info.attr)
 	if fd.fs.signer != nil && fd.fs.codec.s != nil {
-		if url, err := fd.fs.preSignGetUrl(fd.s3Key(fd.fs.root)); err == nil {
+		if url, err := fd.fs.preSignGetUrl(fd.s3Key(fd.fs.root), fd.fs.ttlSignedUrl); err == nil {
 			fd.fs.codec.s.Put(fd.info.attr, url)
 		}
 	}
@@ -234,29 +234,6 @@ func (fd *writer[T]) lazyOpen() {
 	}()
 }
 
-func (fd *writer[T]) preSignPutUrl() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), fd.fs.timeout)
-	defer cancel()
-
-	req := &s3.PutObjectInput{
-		Bucket:   aws.String(fd.fs.bucket),
-		Key:      fd.s3Key(fd.fs.root),
-		Metadata: make(map[string]string),
-	}
-	fd.fs.codec.EncodePutInput(fd.attr, req)
-
-	val, err := fd.fs.signer.PresignPutObject(ctx, req, s3.WithPresignExpires(fd.fs.ttlSignedUrl))
-	if err != nil {
-		return "", &fs.PathError{
-			Op:   "presign",
-			Path: fd.path,
-			Err:  err,
-		}
-	}
-
-	return val.URL, nil
-}
-
 func (fd *writer[T]) Write(p []byte) (int, error) {
 	if fd.r == nil && fd.w == nil {
 		fd.lazyOpen()
@@ -300,7 +277,7 @@ func (fd *writer[T]) Stat() (fs.FileInfo, error) {
 			fd.info.attr = new(T)
 		}
 
-		if url, err := fd.preSignPutUrl(); err == nil {
+		if url, err := fd.fs.preSignPutUrl(fd.s3Key(fd.fs.root), fd.info.attr, fd.fs.ttlSignedUrl); err == nil {
 			fd.fs.codec.s.Put(fd.info.attr, url)
 		}
 	}

@@ -44,6 +44,7 @@ var (
 	_ CreateFS[struct{}] = (*FileSystem[struct{}])(nil)
 	_ RemoveFS           = (*FileSystem[struct{}])(nil)
 	_ CopyFS             = (*FileSystem[struct{}])(nil)
+	_ CurlFS[struct{}]   = (*FileSystem[struct{}])(nil)
 )
 
 // Create a file system instance, mounting S3 Bucket. Use Option type to
@@ -156,7 +157,7 @@ func (fsys *FileSystem[T]) Stat(path string) (fs.FileInfo, error) {
 	fsys.codec.DecodeHeadOutput(val, info.attr)
 
 	if fsys.signer != nil && fsys.codec.s != nil {
-		if url, err := fsys.preSignGetUrl(info.s3Key(fsys.root)); err == nil {
+		if url, err := fsys.preSignGetUrl(info.s3Key(fsys.root), fsys.ttlSignedUrl); err == nil {
 			fsys.codec.s.Put(info.attr, url)
 		}
 	}
@@ -174,7 +175,30 @@ func (fsys *FileSystem[T]) StatSys(stat fs.FileInfo) *T {
 	return info.attr
 }
 
-func (fsys *FileSystem[T]) preSignGetUrl(s3key *string) (string, error) {
+func (fsys *FileSystem[T]) preSignPutUrl(s3key *string, attr *T, ttl time.Duration) (string, error) {
+	req := &s3.PutObjectInput{
+		Bucket:   aws.String(fsys.bucket),
+		Key:      s3key,
+		Metadata: make(map[string]string),
+	}
+	fsys.codec.EncodePutInput(attr, req)
+
+	ctx, cancel := context.WithTimeout(context.Background(), fsys.timeout)
+	defer cancel()
+
+	val, err := fsys.signer.PresignPutObject(ctx, req, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", &fs.PathError{
+			Op:   "presign",
+			Path: "/" + aws.ToString(s3key),
+			Err:  err,
+		}
+	}
+
+	return val.URL, nil
+}
+
+func (fsys *FileSystem[T]) preSignGetUrl(s3key *string, ttl time.Duration) (string, error) {
 	req := &s3.GetObjectInput{
 		Bucket: aws.String(fsys.bucket),
 		Key:    s3key,
@@ -183,7 +207,7 @@ func (fsys *FileSystem[T]) preSignGetUrl(s3key *string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), fsys.timeout)
 	defer cancel()
 
-	val, err := fsys.signer.PresignGetObject(ctx, req, s3.WithPresignExpires(fsys.ttlSignedUrl))
+	val, err := fsys.signer.PresignGetObject(ctx, req, s3.WithPresignExpires(ttl))
 	if err != nil {
 		return "", &fs.PathError{
 			Op:   "presign",
@@ -336,6 +360,38 @@ func (fsys *FileSystem[T]) Wait(path string, timeout time.Duration) error {
 	}
 
 	return nil
+}
+
+func (fsys *FileSystem[T]) PutFileUrl(path string, attr *T, ttl time.Duration) (string, error) {
+	if fsys.signer == nil {
+		return "", &fs.PathError{
+			Op:   "putfileurl",
+			Path: path,
+			Err:  errors.New("signer is not configured"),
+		}
+	}
+
+	if err := RequireValidPath("putfileurl", path); err != nil {
+		return "", err
+	}
+
+	return fsys.preSignPutUrl(s3Key(fsys.root, path), attr, ttl)
+}
+
+func (fsys *FileSystem[T]) GetFileUrl(path string, ttl time.Duration) (string, error) {
+	if fsys.signer == nil {
+		return "", &fs.PathError{
+			Op:   "getfileurl",
+			Path: path,
+			Err:  errors.New("signer is not configured"),
+		}
+	}
+
+	if err := RequireValidPath("getfileurl", path); err != nil {
+		return "", err
+	}
+
+	return fsys.preSignGetUrl(s3Key(fsys.root, path), ttl)
 }
 
 //------------------------------------------------------------------------------
