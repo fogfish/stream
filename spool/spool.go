@@ -168,7 +168,7 @@ func (spool *Spool) ForEachPath(ctx context.Context, paths []string, f Writer) e
 }
 
 // apply spool function over the file
-func (spool *Spool) apply(ctx context.Context, path string, f Writer) (err error) {
+func (spool *Spool) apply(ctx context.Context, path string, f Writer) (rerr error) {
 	rfd, err := spool.reader.Open(path)
 	if err != nil {
 		return spool.iserr(err)
@@ -180,9 +180,10 @@ func (spool *Spool) apply(ctx context.Context, path string, f Writer) (err error
 		return err
 	}
 	defer func() {
-		err = wfd.Close()
+		err := wfd.Close()
 		if err != nil {
 			wfd.Cancel()
+			rerr = err
 		}
 	}()
 
