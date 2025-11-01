@@ -307,7 +307,7 @@ func TestReadWrite(t *testing.T) {
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
-			it.Error(s3fs.Open("invalid..key/")),
+			it.Error(s3fs.Open("../invalid")),
 		)
 	})
 
@@ -419,7 +419,7 @@ func TestWalk(t *testing.T) {
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
-			it.Error(s3fs.ReadDir("invalid..key/")),
+			it.Error(s3fs.ReadDir("../invalid/")),
 		)
 	})
 
@@ -659,7 +659,7 @@ func TestStat(t *testing.T) {
 		it.Then(t).Should(it.Nil(err))
 
 		it.Then(t).Should(
-			it.Error(s3fs.Stat("invalid..key/")),
+			it.Error(s3fs.Stat("../invalid")),
 		)
 	})
 

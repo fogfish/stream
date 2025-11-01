@@ -129,6 +129,28 @@ func TestReadWrite(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
+	t.Run("File/Write/RelativePath", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		// Test with relative path (no leading slash)
+		fd, err := s3fs.Create("file.txt", nil)
+		it.Then(t).Must(it.Nil(err))
+
+		n, err := io.WriteString(fd, content)
+		it.Then(t).Should(
+			it.Nil(err),
+			it.Equal(n, len(content)),
+		)
+
+		err = fd.Close()
+		it.Then(t).Must(it.Nil(err))
+
+		// Verify file was created
+		_, err = s3fs.Stat("file.txt")
+		it.Then(t).Must(it.Nil(err))
+	})
+
 	t.Run("File/Write/Error/Dir", func(t *testing.T) {
 		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(
@@ -354,6 +376,20 @@ func TestRemove(t *testing.T) {
 		it.Then(t).Must(it.Nil(err))
 	})
 
+	t.Run("Remove/RelativePath", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		// Create with relative path
+		fd, err := s3fs.Create("test.txt", nil)
+		it.Then(t).Must(it.Nil(err))
+		fd.Close()
+
+		// Remove with relative path
+		err = s3fs.Remove("test.txt")
+		it.Then(t).Must(it.Nil(err))
+	})
+
 	t.Run("Remove/Error", func(t *testing.T) {
 		s3fs, err := lfs.NewTempFS("", "lfs")
 		it.Then(t).Should(it.Nil(err))
@@ -385,7 +421,28 @@ func TestCopy(t *testing.T) {
 			it.Nil(createFile(s3fs)),
 		)
 
-		err = s3fs.Copy(file, filepath.Join(s3fs.Root, "test/file"))
+		err = s3fs.Copy(file, "/test/file")
+		it.Then(t).Must(it.Nil(err))
+	})
+
+	t.Run("Copy/RelativePath", func(t *testing.T) {
+		s3fs, err := lfs.NewTempFS("", "lfs")
+		it.Then(t).Should(it.Nil(err))
+
+		// Create source with relative path
+		fd, err := s3fs.Create("source.txt", nil)
+		it.Then(t).Must(it.Nil(err))
+		fd.Write([]byte(content))
+		fd.Close()
+
+		// Copy with relative paths
+		err = s3fs.Copy("source.txt", "target.txt")
+		it.Then(t).Must(it.Nil(err))
+
+		// Verify both files exist
+		_, err = s3fs.Stat("source.txt")
+		it.Then(t).Must(it.Nil(err))
+		_, err = s3fs.Stat("target.txt")
 		it.Then(t).Must(it.Nil(err))
 	})
 
@@ -410,7 +467,7 @@ func TestCopy(t *testing.T) {
 
 		it.Then(t).Should(
 			it.Fail(func() error {
-				return s3fs.Copy(file, filepath.Join(s3fs.Root, "the/file"))
+				return s3fs.Copy(file, "/the/file")
 			}),
 		)
 	})
