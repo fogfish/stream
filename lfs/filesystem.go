@@ -65,15 +65,16 @@ func NewTempFS(root string, pattern string) (*FileSystem, error) {
 	return New(dir)
 }
 
-// To open the file for writing use `Create` function giving the absolute path
-// starting with `/`, the returned file descriptor is a composite of
-// `io.Writer`, `io.Closer` and `stream.Stat`.
+// To open the file for writing use `Create` function giving the path.
+// The path can be with or without a leading `/` - both are treated as paths
+// relative to the mount point.
+// The returned file descriptor is a composite of `io.Writer`, `io.Closer` and `stream.Stat`.
 func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error) {
 	if err := stream.RequireValidFile("create", path); err != nil {
 		return nil, err
 	}
 
-	file := filepath.Join(fsys.Root, path)
+	file := filepath.Join(fsys.Root, trim(path))
 	return fsys.osCreate("create", file)
 }
 
@@ -103,9 +104,10 @@ type nopCanceler struct{ *os.File }
 // Cancel effect of file i/o
 func (f nopCanceler) Cancel() error { return f.Close() }
 
-// To open the file for reading use `Open` function giving the absolute path
-// starting with `/`, the returned file descriptor is a composite of
-// `io.Reader`, `io.Closer` and `stream.Stat`.
+// To open the file for reading use `Open` function giving the path.
+// The path can be with or without a leading `/` - both are treated as paths
+// relative to the mount point.
+// The returned file descriptor is a composite of `io.Reader`, `io.Closer` and `stream.Stat`.
 func (fsys *FileSystem) Open(path string) (fs.File, error) {
 	if err := stream.RequireValidPath("open", path); err != nil {
 		return nil, err
@@ -181,7 +183,7 @@ func (fsys *FileSystem) Remove(path string) error {
 		return err
 	}
 
-	file := filepath.Join(fsys.Root, path)
+	file := filepath.Join(fsys.Root, trim(path))
 
 	return os.Remove(file)
 }
@@ -202,7 +204,7 @@ func (fsys *FileSystem) Copy(source, target string) (err error) {
 	}
 	defer r.Close()
 
-	w, err := fsys.osCreate("copy", target)
+	w, err := fsys.osCreate("copy", filepath.Join(fsys.Root, trim(target)))
 	if err != nil {
 		return err
 	}

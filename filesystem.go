@@ -84,13 +84,15 @@ func NewFS(bucket string, opts ...Option) (*FileSystem[struct{}], error) {
 	return New[struct{}](bucket, opts...)
 }
 
-// To open the file for writing use `Create` function giving the absolute path
-// starting with `/`, the returned file descriptor is a composite of
-// `io.Writer`, `io.Closer` and `stream.Stat`. Utilize Golang's convenient
-// streaming methods to update S3 object seamlessly. Once all bytes are written,
-// it's crucial to close the stream. Failure to do so would cause data loss.
-// The object is considered successfully created on S3 only if all `Write`
-// operations and subsequent `Close` actions are successful.
+// To open the file for writing use `Create` function giving the path.
+// The path can be with or without a leading `/` - both are treated as paths
+// relative to the mount point (bucket or bucket/prefix).
+// The returned file descriptor is a composite of `io.Writer`, `io.Closer` and
+// `stream.Stat`. Utilize Golang's convenient streaming methods to update S3
+// object seamlessly. Once all bytes are written, it's crucial to close the stream.
+// Failure to do so would cause data loss. The object is considered successfully
+// created on S3 only if all `Write` operations and subsequent `Close` actions
+// are successful.
 func (fsys *FileSystem[T]) Create(path string, attr *T) (File, error) {
 	if err := RequireValidFile("create", path); err != nil {
 		return nil, err
@@ -99,10 +101,12 @@ func (fsys *FileSystem[T]) Create(path string, attr *T) (File, error) {
 	return newWriter(fsys, path, attr), nil
 }
 
-// To open the file for reading use `Open` function giving the absolute path
-// starting with `/`, the returned file descriptor is a composite of
-// `io.Reader`, `io.Closer` and `stream.Stat`. Utilize Golang's convenient
-// streaming methods to consume S3 object seamlessly.
+// To open the file for reading use `Open` function giving the path.
+// The path can be with or without a leading `/` - both are treated as paths
+// relative to the mount point (bucket or bucket/prefix).
+// The returned file descriptor is a composite of `io.Reader`, `io.Closer` and
+// `stream.Stat`. Utilize Golang's convenient streaming methods to consume S3
+// object seamlessly.
 func (fsys *FileSystem[T]) Open(path string) (fs.File, error) {
 	if err := RequireValidPath("open", path); err != nil {
 		return nil, err
