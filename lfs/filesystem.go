@@ -129,9 +129,10 @@ func (fsys *FileSystem) Stat(path string) (fs.FileInfo, error) {
 //
 // It return path relative to pattern for all found object.
 func (fsys *FileSystem) ReadDir(path string) ([]fs.DirEntry, error) {
-	if err := stream.RequireValidDir("readdir", path); err != nil {
-		return nil, err
-	}
+	// Note: Disabled validation to be compatible with os.DirFS behavior
+	// if err := stream.RequireValidDir("readdir", path); err != nil {
+	// 	return nil, err
+	// }
 
 	if f, ok := fsys.fs.(fs.ReadDirFS); ok {
 		return f.ReadDir(trim(path))
