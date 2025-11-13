@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/fogfish/opts"
 	"github.com/fogfish/stream"
@@ -63,8 +64,11 @@ var (
 	// spool skips error, continue as warning
 	WithSkipError = withStrict(skiperror)
 
-	// spool applies to files
+	// spool files matching the pattern
 	WithPattern = opts.ForName[Spool, string]("pattern")
+
+	// output files with new extension
+	WithFileExt = opts.ForName[Spool, string]("ext")
 )
 
 // Spool file writer
@@ -76,6 +80,7 @@ type Spool struct {
 	mutable int
 	strict  int
 	pattern string
+	ext     string
 }
 
 func New(reader, writer FileSystem, opt ...opts.Option[Spool]) *Spool {
@@ -175,7 +180,12 @@ func (spool *Spool) apply(ctx context.Context, path string, f Writer) (rerr erro
 	}
 	defer rfd.Close()
 
-	wfd, err := spool.writer.Create(path, nil)
+	target := path
+	if len(spool.ext) > 0 {
+		target = strings.TrimSuffix(target, filepath.Ext(target)) + spool.ext
+	}
+
+	wfd, err := spool.writer.Create(target, nil)
 	if err != nil {
 		return err
 	}
