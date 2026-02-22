@@ -35,7 +35,7 @@ func TestSpoolForEach(t *testing.T) {
 	}
 
 	dat := []string{}
-	qq.ForEach(context.Background(), "/",
+	qq.ForEach(context.Background(), spool.WalkDir("/"),
 		func(ctx context.Context, path string, r io.Reader, w io.Writer) error {
 			dat = append(dat, path)
 			_, err := io.Copy(w, r)
@@ -64,7 +64,7 @@ func TestSpoolForEachPath(t *testing.T) {
 	}
 
 	dat := []string{}
-	qq.ForEachPath(context.Background(), seq,
+	qq.ForEach(context.Background(), spool.WalkFiles(seq),
 		func(ctx context.Context, path string, r io.Reader, w io.Writer) error {
 			dat = append(dat, path)
 			_, err := io.Copy(w, r)
@@ -93,7 +93,7 @@ func TestSpoolPartition(t *testing.T) {
 	}
 
 	dat := []string{}
-	qq.Partition(context.Background(), "/",
+	qq.Shard(context.Background(), "/",
 		func(ctx context.Context, path string, r io.Reader) (string, error) {
 			dat = append(dat, path)
 			return path, nil
