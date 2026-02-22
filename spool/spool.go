@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2020 - 2025 Dmitry Kolesnikov
+// Copyright (C) 2020 - 2026 Dmitry Kolesnikov
 //
 // This file may be modified and distributed under the terms
 // of the MIT license.  See the LICENSE file for details.
@@ -22,9 +22,9 @@ import (
 	"github.com/fogfish/stream"
 )
 
-// A FileSystem provides access to a hierarchical file system.
-// The abstraction support I/O to local file system or AWS S3.
-// Use it with https://github.com/fogfish/stream
+// A FileSystem abstraction provides access to a hierarchical file system or sequence of files
+//
+// Use https://github.com/fogfish/stream to implement FileSystem for local file system or AWS S3.
 type FileSystem interface {
 	fs.FS
 	Create(path string, attr *struct{}) (File, error)
@@ -38,6 +38,15 @@ type File = interface {
 	Stat() (fs.FileInfo, error)
 	Cancel() error
 }
+
+// Walker provides Walk method to traverse the files.
+type Walker interface {
+	Walk(fs.FS, fs.WalkDirFunc) error
+}
+
+// Spooler is a function applied to each file.
+// It is given the file path, a reader for the input file and a writer for the output file.
+type Spooler = func(context.Context, string, io.Reader, io.Writer) error
 
 const (
 	immutable = iota
@@ -71,9 +80,6 @@ var (
 	WithFileExt = opts.ForName[Spool, string]("ext")
 )
 
-// Spool file writer
-type Writer = func(context.Context, string, io.Reader, io.Writer) error
-
 type Spool struct {
 	reader  FileSystem
 	writer  FileSystem
@@ -103,18 +109,22 @@ func (spool *Spool) iserr(err error) error {
 	return err
 }
 
-// Write new file to spool
+// Write file to spool, consuming all data from the reader.
 func (spool *Spool) Write(path string, r io.Reader) error {
 	return spool.write(spool.reader, path, r)
 }
 
+// Write file to spool
 func (spool *Spool) WriteFile(path string, b []byte) error {
 	return spool.Write(path, bytes.NewBuffer(b))
 }
 
-// Apply the spool function over each file in the reader filesystem, producing
-// results to writer file system.
-func (spool *Spool) ForEach(ctx context.Context, dir string, f Writer) error {
+// ForEach iterates over the files in the spool's reader using the provided walker.
+// It applies the Spooler function f to each file that matches the spool's pattern (if set).
+// Directories are skipped, and files not matching the pattern are ignored.
+// The function returns an error if the regex compilation fails, walking encounters an error,
+// or if applying the Spooler function fails for any file.
+func (spool *Spool) ForEach(ctx context.Context, walker Walker, f Spooler) error {
 	var re *regexp.Regexp
 	if len(spool.pattern) > 0 {
 		ex, err := regexp.Compile(spool.pattern)
@@ -124,7 +134,7 @@ func (spool *Spool) ForEach(ctx context.Context, dir string, f Writer) error {
 		re = ex
 	}
 
-	return fs.WalkDir(spool.reader, dir,
+	return walker.Walk(spool.reader,
 		func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -147,33 +157,8 @@ func (spool *Spool) ForEach(ctx context.Context, dir string, f Writer) error {
 	)
 }
 
-// Apply the spool function over all file in the reader filesystem, producing
-// results to writer file system.
-func (spool *Spool) ForEachPath(ctx context.Context, paths []string, f Writer) error {
-	var re *regexp.Regexp
-	if len(spool.pattern) > 0 {
-		ex, err := regexp.Compile(spool.pattern)
-		if err != nil {
-			return err
-		}
-		re = ex
-	}
-
-	for _, path := range paths {
-		if re != nil && !re.MatchString(path) {
-			return nil
-		}
-
-		if err := spool.apply(ctx, path, f); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // apply spool function over the file
-func (spool *Spool) apply(ctx context.Context, path string, f Writer) (rerr error) {
+func (spool *Spool) apply(ctx context.Context, path string, f Spooler) (rerr error) {
 	rfd, err := spool.reader.Open(path)
 	if err != nil {
 		return spool.iserr(err)
@@ -212,9 +197,15 @@ func (spool *Spool) apply(ctx context.Context, path string, f Writer) (rerr erro
 	return nil
 }
 
-// Apply the parition function over each file in the reader filesystem, producing
-// results to writer file system.
-func (spool *Spool) Partition(
+// Apply the shard function over each file in the reader filesystem.
+// The shard function is given the file path and a reader for the input file,
+// and returns the shard name for the output file. The output file is written
+// to the writer filesystem with the same path, but prefixed with the shard name.
+//
+// If the shard function returns an empty string, the file is skipped.
+// After processing, if the spool is mutable, the original file is removed
+// from the reader filesystem.
+func (spool *Spool) Shard(
 	ctx context.Context,
 	dir string,
 	f func(context.Context, string, io.Reader) (string, error),
