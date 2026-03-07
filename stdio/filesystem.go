@@ -9,8 +9,8 @@
 package stdio
 
 import (
-	"io"
 	"io/fs"
+	"os"
 	"time"
 
 	"github.com/fogfish/stream"
@@ -23,15 +23,7 @@ type FileSystem struct {
 }
 
 type writer struct {
-	io.Writer
-}
-
-func (w *writer) Stat() (fs.FileInfo, error) {
-	return nil, nil
-}
-
-func (w *writer) Close() error {
-	return nil
+	*os.File
 }
 
 func (w *writer) Cancel() error {
@@ -39,15 +31,7 @@ func (w *writer) Cancel() error {
 }
 
 type reader struct {
-	io.Reader
-}
-
-func (r *reader) Stat() (fs.FileInfo, error) {
-	return nil, nil
-}
-
-func (r *reader) Close() error {
-	return nil
+	*os.File
 }
 
 var (
@@ -61,7 +45,7 @@ var (
 )
 
 // Create a new FileSystem instance with the given reader and writer.
-func New(r io.Reader, w io.Writer) (*FileSystem, error) {
+func New(r *os.File, w *os.File) (*FileSystem, error) {
 	fsys := &FileSystem{}
 
 	if r != nil {
@@ -76,7 +60,7 @@ func New(r io.Reader, w io.Writer) (*FileSystem, error) {
 }
 
 func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error) {
-	if fsys.w.Writer == nil {
+	if fsys.w.File == nil {
 		return nil, &fs.PathError{
 			Op:   "Create",
 			Path: path,
@@ -88,7 +72,7 @@ func (fsys *FileSystem) Create(path string, attr *struct{}) (stream.File, error)
 }
 
 func (fsys *FileSystem) Open(path string) (fs.File, error) {
-	if fsys.r.Reader == nil {
+	if fsys.r.File == nil {
 		return nil, &fs.PathError{
 			Op:   "Open",
 			Path: path,
@@ -100,20 +84,31 @@ func (fsys *FileSystem) Open(path string) (fs.File, error) {
 }
 
 func (fsys *FileSystem) Stat(path string) (fs.FileInfo, error) {
+	if fsys.r.File != nil {
+		info, err := fsys.r.File.Stat()
+		if err != nil {
+			return nil, err
+		}
+		return info, nil
+	}
 	return nil, nil
 }
 
 func (fsys *FileSystem) ReadDir(path string) ([]fs.DirEntry, error) {
-	if fsys.r.Reader != nil {
-		return []fs.DirEntry{direntry("stdin")}, nil
+	if fsys.r.File != nil {
+		info, err := fsys.r.File.Stat()
+		if err != nil {
+			return nil, err
+		}
+		return []fs.DirEntry{fs.FileInfoToDirEntry(info)}, nil
 	}
 
 	return nil, nil
 }
 
 func (fsys *FileSystem) Glob(pattern string) ([]string, error) {
-	if fsys.r.Reader != nil {
-		return []string{"stdin"}, nil
+	if fsys.r.File != nil {
+		return []string{"STDIN"}, nil
 	}
 
 	return nil, nil
@@ -130,47 +125,3 @@ func (fsys *FileSystem) Copy(source, target string) (err error) {
 func (fsys *FileSystem) Wait(path string, timeout time.Duration) error {
 	return nil
 }
-
-type direntry string
-
-func (d direntry) Name() string {
-	return string(d)
-}
-
-func (d direntry) IsDir() bool {
-	return false
-}
-
-func (d direntry) Type() fs.FileMode {
-	return 0
-}
-
-func (d direntry) Info() (fs.FileInfo, error) {
-	return nil, nil
-}
-
-/*
-
-type DirEntry interface {
-	// Name returns the name of the file (or subdirectory) described by the entry.
-	// This name is only the final element of the path (the base name), not the entire path.
-	// For example, Name would return "hello.go" not "home/gopher/hello.go".
-	Name() string
-
-	// IsDir reports whether the entry describes a directory.
-	IsDir() bool
-
-	// Type returns the type bits for the entry.
-	// The type bits are a subset of the usual FileMode bits, those returned by the FileMode.Type method.
-	Type() FileMode
-
-	// Info returns the FileInfo for the file or subdirectory described by the entry.
-	// The returned FileInfo may be from the time of the original directory read
-	// or from the time of the call to Info. If the file has been removed or renamed
-	// since the directory read, Info may return an error satisfying errors.Is(err, ErrNotExist).
-	// If the entry denotes a symbolic link, Info reports the information about the link itself,
-	// not the link's target.
-	Info() (FileInfo, error)
-}
-
-*/

@@ -9,9 +9,8 @@
 package stdio_test
 
 import (
-	"bytes"
 	"io"
-	"strings"
+	"os"
 	"testing"
 	"time"
 
@@ -23,21 +22,21 @@ var content = "Hello World!"
 
 func TestNew(t *testing.T) {
 	t.Run("Both", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), &bytes.Buffer{})
+		fsys, err := stdio.New(os.Stdin, os.Stdout)
 		it.Then(t).
 			Should(it.Nil(err)).
 			ShouldNot(it.Nil(fsys))
 	})
 
 	t.Run("ReaderOnly", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), nil)
+		fsys, err := stdio.New(os.Stdin, nil)
 		it.Then(t).
 			Should(it.Nil(err)).
 			ShouldNot(it.Nil(fsys))
 	})
 
 	t.Run("WriterOnly", func(t *testing.T) {
-		fsys, err := stdio.New(nil, &bytes.Buffer{})
+		fsys, err := stdio.New(nil, os.Stdout)
 		it.Then(t).
 			Should(it.Nil(err)).
 			ShouldNot(it.Nil(fsys))
@@ -53,8 +52,11 @@ func TestNew(t *testing.T) {
 
 func TestCreate(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
-		buf := &bytes.Buffer{}
-		fsys, err := stdio.New(nil, buf)
+		r, w, err := os.Pipe()
+		it.Then(t).Must(it.Nil(err))
+		defer r.Close()
+
+		fsys, err := stdio.New(nil, w)
 		it.Then(t).Must(it.Nil(err))
 
 		fd, err := fsys.Create("stdout", nil)
@@ -69,25 +71,25 @@ func TestCreate(t *testing.T) {
 		err = fd.Close()
 		it.Then(t).Must(it.Nil(err))
 
-		it.Then(t).Should(it.Equal(buf.String(), content))
+		buf, err := io.ReadAll(r)
+		it.Then(t).Must(it.Nil(err))
+		it.Then(t).Should(it.Equal(string(buf), content))
 	})
 
 	t.Run("Write/Stat", func(t *testing.T) {
-		fsys, err := stdio.New(nil, &bytes.Buffer{})
+		fsys, err := stdio.New(nil, os.Stdout)
 		it.Then(t).Must(it.Nil(err))
 
 		fd, err := fsys.Create("stdout", nil)
 		it.Then(t).Must(it.Nil(err))
 
 		fi, err := fd.Stat()
-		it.Then(t).Should(
-			it.Nil(err),
-			it.Nil(fi),
-		)
+		it.Then(t).Should(it.Nil(err))
+		it.Then(t).ShouldNot(it.Nil(fi))
 	})
 
 	t.Run("Write/Cancel", func(t *testing.T) {
-		fsys, err := stdio.New(nil, &bytes.Buffer{})
+		fsys, err := stdio.New(nil, os.Stdout)
 		it.Then(t).Must(it.Nil(err))
 
 		fd, err := fsys.Create("stdout", nil)
@@ -109,7 +111,13 @@ func TestCreate(t *testing.T) {
 
 func TestOpen(t *testing.T) {
 	t.Run("Read", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), nil)
+		r, w, err := os.Pipe()
+		it.Then(t).Must(it.Nil(err))
+		_, err = io.WriteString(w, content)
+		it.Then(t).Must(it.Nil(err))
+		w.Close()
+
+		fsys, err := stdio.New(r, nil)
 		it.Then(t).Must(it.Nil(err))
 
 		fd, err := fsys.Open("stdin")
@@ -126,17 +134,15 @@ func TestOpen(t *testing.T) {
 	})
 
 	t.Run("Read/Stat", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), nil)
+		fsys, err := stdio.New(os.Stdin, nil)
 		it.Then(t).Must(it.Nil(err))
 
 		fd, err := fsys.Open("stdin")
 		it.Then(t).Must(it.Nil(err))
 
 		fi, err := fd.Stat()
-		it.Then(t).Should(
-			it.Nil(err),
-			it.Nil(fi),
-		)
+		it.Then(t).Should(it.Nil(err))
+		it.Then(t).ShouldNot(it.Nil(fi))
 	})
 
 	t.Run("Read/Error/NoReader", func(t *testing.T) {
@@ -164,7 +170,7 @@ func TestStat(t *testing.T) {
 
 func TestReadDir(t *testing.T) {
 	t.Run("WithReader", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), nil)
+		fsys, err := stdio.New(os.Stdin, nil)
 		it.Then(t).Must(it.Nil(err))
 
 		entries, err := fsys.ReadDir("/")
@@ -172,14 +178,12 @@ func TestReadDir(t *testing.T) {
 		it.Then(t).Should(it.Equal(len(entries), 1))
 
 		it.Then(t).Should(
-			it.Equal(entries[0].Name(), "stdin"),
 			it.Equal(entries[0].IsDir(), false),
-			it.Equal(entries[0].Type(), 0),
 		)
 	})
 
 	t.Run("WithReader/DirEntryInfo", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), nil)
+		fsys, err := stdio.New(os.Stdin, nil)
 		it.Then(t).Must(it.Nil(err))
 
 		entries, err := fsys.ReadDir("/")
@@ -187,10 +191,8 @@ func TestReadDir(t *testing.T) {
 		it.Then(t).Must(it.Equal(len(entries), 1))
 
 		fi, err := entries[0].Info()
-		it.Then(t).Should(
-			it.Nil(err),
-			it.Nil(fi),
-		)
+		it.Then(t).Should(it.Nil(err))
+		it.Then(t).ShouldNot(it.Nil(fi))
 	})
 
 	t.Run("NoReader", func(t *testing.T) {
@@ -207,7 +209,7 @@ func TestReadDir(t *testing.T) {
 
 func TestGlob(t *testing.T) {
 	t.Run("Glob", func(t *testing.T) {
-		fsys, err := stdio.New(strings.NewReader(content), &bytes.Buffer{})
+		fsys, err := stdio.New(os.Stdin, os.Stdout)
 		it.Then(t).Must(it.Nil(err))
 
 		matches, err := fsys.Glob("*")
