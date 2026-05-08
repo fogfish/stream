@@ -9,10 +9,13 @@
 package stream
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
+	tmTypes "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/golem/hseq"
@@ -22,6 +25,7 @@ import (
 type codec[T any] struct {
 	h optics.Isomorphism[T, s3.HeadObjectOutput]
 	w optics.Isomorphism[T, s3.PutObjectInput]
+	u optics.Isomorphism[T, transfermanager.UploadObjectInput]
 	r optics.Isomorphism[T, s3.GetObjectOutput]
 	s optics.Lens[T, string]
 }
@@ -30,6 +34,7 @@ func newCodec[T any]() *codec[T] {
 	c := &codec[T]{
 		h: isomorphism[T, s3.HeadObjectOutput](),
 		w: isomorphism[T, s3.PutObjectInput](),
+		u: isomorphism[T, transfermanager.UploadObjectInput](),
 		r: isomorphism[T, s3.GetObjectOutput](),
 	}
 
@@ -41,9 +46,10 @@ func newCodec[T any]() *codec[T] {
 	return c
 }
 
-func (c *codec[T]) DecodeHeadOutput(s *s3.HeadObjectOutput, t *T) { c.h.Inverse(s, t) }
-func (c *codec[T]) EncodePutInput(t *T, s *s3.PutObjectInput)     { c.w.Forward(t, s) }
-func (c *codec[T]) DecodeGetOutput(s *s3.GetObjectOutput, t *T)   { c.r.Inverse(s, t) }
+func (c *codec[T]) DecodeHeadOutput(s *s3.HeadObjectOutput, t *T)                { c.h.Inverse(s, t) }
+func (c *codec[T]) EncodePutInput(t *T, s *s3.PutObjectInput)                    { c.w.Forward(t, s) }
+func (c *codec[T]) EncodeUploadInput(t *T, s *transfermanager.UploadObjectInput) { c.u.Forward(t, s) }
+func (c *codec[T]) DecodeGetOutput(s *s3.GetObjectOutput, t *T)                  { c.r.Inverse(s, t) }
 
 // codec for category S to T
 func isomorphism[T, S any]() optics.Isomorphism[T, S] {
@@ -110,11 +116,26 @@ func codecStorageClass[T, S any](ts hseq.Seq[T], sq hseq.Seq[S], attr string) op
 		return nil
 	}
 
-	dec := optics.BiMap(
-		optics.NewLens[S, types.StorageClass](s),
-		func(x types.StorageClass) string { return string(x) },
-		func(x string) types.StorageClass { return types.StorageClass(x) },
-	)
+	var dec optics.Lens[S, string]
+	switch s.Type.PkgPath() {
+	case "github.com/aws/aws-sdk-go-v2/service/s3/types":
+		dec = optics.BiMap(
+			optics.NewLens[S, types.StorageClass](s),
+			func(x types.StorageClass) string { return string(x) },
+			func(x string) types.StorageClass { return types.StorageClass(x) },
+		)
+
+	case "github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager/types":
+		dec = optics.BiMap(
+			optics.NewLens[S, tmTypes.StorageClass](s),
+			func(x tmTypes.StorageClass) string { return string(x) },
+			func(x string) tmTypes.StorageClass { return tmTypes.StorageClass(x) },
+		)
+
+	default:
+		panic(fmt.Errorf("unsupported storage class type %s.%s", s.Type.PkgPath(), s.Type.Name()))
+	}
+
 	enc := optics.NewLens[T, string](t)
 	return optics.Iso(enc, dec)
 }

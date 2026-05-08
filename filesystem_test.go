@@ -18,7 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/it/v2"
@@ -119,14 +119,14 @@ var (
 	}
 
 	s3PutObject = mocks.PutObject{
-		Mock: mocks.Mock[manager.UploadOutput]{
+		Mock: mocks.Mock[transfermanager.UploadObjectOutput]{
 			ExpectKey: file[1:],
 			ExpectVal: content,
 		},
 	}
 
 	s3PutObjectError = mocks.PutObject{
-		Mock: mocks.Mock[manager.UploadOutput]{
+		Mock: mocks.Mock[transfermanager.UploadObjectOutput]{
 			ExpectKey: file[1:],
 			ReturnErr: errors.New("critical failure"),
 		},

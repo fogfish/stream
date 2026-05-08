@@ -14,7 +14,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/fogfish/opts"
 )
@@ -105,7 +106,7 @@ func optsFromConfig(c *Opts, cfg aws.Config) error {
 	}
 
 	if c.upload == nil {
-		c.upload = manager.NewUploader(api)
+		c.upload = transfermanager.New(api)
 	}
 
 	if c.signer == nil {

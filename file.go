@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -214,16 +215,16 @@ func (fd *writer[T]) lazyOpen() {
 		ctx, cancel := context.WithTimeout(context.Background(), fd.fs.timeout)
 		defer cancel()
 
-		req := &s3.PutObjectInput{
+		req := &transfermanager.UploadObjectInput{
 			Bucket:   aws.String(fd.fs.bucket),
 			Key:      fd.s3Key(fd.fs.root),
 			Body:     fd.r,
 			Metadata: make(map[string]string),
 		}
-		fd.fs.codec.EncodePutInput(fd.attr, req)
+		fd.fs.codec.EncodeUploadInput(fd.attr, req)
 
 		fd.cancel = cancel
-		if _, err := fd.fs.upload.Upload(ctx, req); err != nil {
+		if _, err := fd.fs.upload.UploadObject(ctx, req); err != nil {
 			fd.err = &fs.PathError{
 				Op:   "write",
 				Path: fd.path,
