@@ -16,7 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/stream"
@@ -140,9 +140,11 @@ func (mock CopyObject) CopyObject(ctx context.Context, params *s3.CopyObjectInpu
 
 //
 
-type PutObject struct{ Mock[manager.UploadOutput] }
+type PutObject struct {
+	Mock[transfermanager.UploadObjectOutput]
+}
 
-func (mock PutObject) Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error) {
+func (mock PutObject) UploadObject(ctx context.Context, input *transfermanager.UploadObjectInput, opts ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error) {
 	if err := mock.Assert(ctx, input.Key); err != nil {
 		return nil, err
 	}

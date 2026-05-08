@@ -15,7 +15,7 @@ import (
 	"time"
 
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
@@ -76,9 +76,15 @@ type SystemMetadata struct {
 }
 
 // Well-known attribute for reading pre-signed Urls of S3 objects
-type PreSignedUrl struct {
+type PreSignedURL struct {
 	PreSignedUrl string
 }
+
+const (
+	typeSystemMetadata = "SystemMetadata"
+	typePreSignedURL   = "PreSignedURL"
+	attrPreSignedUrl   = "PreSignedUrl"
+)
 
 //-----------------------------------------------------------------------------
 
@@ -91,7 +97,7 @@ type S3 interface {
 }
 
 type S3Upload interface {
-	Upload(ctx context.Context, input *s3.PutObjectInput, opts ...func(*manager.Uploader)) (*manager.UploadOutput, error)
+	UploadObject(ctx context.Context, input *transfermanager.UploadObjectInput, opts ...func(*transfermanager.Options)) (*transfermanager.UploadObjectOutput, error)
 }
 
 type S3Signer interface {

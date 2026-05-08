@@ -18,7 +18,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/transfermanager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/fogfish/it/v2"
@@ -119,14 +119,14 @@ var (
 	}
 
 	s3PutObject = mocks.PutObject{
-		Mock: mocks.Mock[manager.UploadOutput]{
+		Mock: mocks.Mock[transfermanager.UploadObjectOutput]{
 			ExpectKey: file[1:],
 			ExpectVal: content,
 		},
 	}
 
 	s3PutObjectError = mocks.PutObject{
-		Mock: mocks.Mock[manager.UploadOutput]{
+		Mock: mocks.Mock[transfermanager.UploadObjectOutput]{
 			ExpectKey: file[1:],
 			ReturnErr: errors.New("critical failure"),
 		},
@@ -819,7 +819,27 @@ func TestMetadata(t *testing.T) {
 
 func TestPreSign(t *testing.T) {
 	t.Run("PreSignUrl", func(t *testing.T) {
-		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+		s3fs, err := stream.New[stream.PreSignedURL]("test",
+			stream.WithS3(s3HeadObject),
+			stream.WithS3Signer(s3PresignGetObject),
+		)
+		it.Then(t).Should(it.Nil(err))
+
+		fi, err := s3fs.Stat(file)
+		it.Then(t).Must(it.Nil(err))
+
+		meta := s3fs.StatSys(fi)
+		it.Then(t).Should(
+			it.Equal(meta.PreSignedUrl, presignedUrl),
+		)
+	})
+
+	t.Run("PreSignUrl/Embedded", func(t *testing.T) {
+		type T struct {
+			stream.PreSignedURL
+		}
+
+		s3fs, err := stream.New[T]("test",
 			stream.WithS3(s3HeadObject),
 			stream.WithS3Signer(s3PresignGetObject),
 		)
@@ -835,7 +855,7 @@ func TestPreSign(t *testing.T) {
 	})
 
 	t.Run("File/Read/PreSignUrl", func(t *testing.T) {
-		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+		s3fs, err := stream.New[stream.PreSignedURL]("test",
 			stream.WithS3(s3GetObject),
 			stream.WithS3Signer(s3PresignGetObject),
 		)
@@ -857,7 +877,7 @@ func TestPreSign(t *testing.T) {
 	})
 
 	t.Run("File/Read/PreSignUrl/Error", func(t *testing.T) {
-		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+		s3fs, err := stream.New[stream.PreSignedURL]("test",
 			stream.WithS3(s3GetObject),
 			stream.WithS3Signer(s3PresignGetObjectError),
 		)
@@ -879,7 +899,7 @@ func TestPreSign(t *testing.T) {
 	})
 
 	t.Run("File/Write/PreSignUrl", func(t *testing.T) {
-		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+		s3fs, err := stream.New[stream.PreSignedURL]("test",
 			stream.WithS3Signer(s3PresignPutObject),
 		)
 		it.Then(t).Should(it.Nil(err))
@@ -900,7 +920,7 @@ func TestPreSign(t *testing.T) {
 	})
 
 	t.Run("File/Write/PreSignUrl/Error", func(t *testing.T) {
-		s3fs, err := stream.New[stream.PreSignedUrl]("test",
+		s3fs, err := stream.New[stream.PreSignedURL]("test",
 			stream.WithS3Signer(s3PresignPutObjectError),
 		)
 		it.Then(t).Should(it.Nil(err))
