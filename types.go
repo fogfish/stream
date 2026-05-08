@@ -76,9 +76,15 @@ type SystemMetadata struct {
 }
 
 // Well-known attribute for reading pre-signed Urls of S3 objects
-type PreSignedUrl struct {
+type PreSignedURL struct {
 	PreSignedUrl string
 }
+
+const (
+	typeSystemMetadata = "SystemMetadata"
+	typePreSignedURL   = "PreSignedURL"
+	attrPreSignedUrl   = "PreSignedUrl"
+)
 
 //-----------------------------------------------------------------------------
 

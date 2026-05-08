@@ -34,7 +34,7 @@ func newCodec[T any]() *codec[T] {
 	}
 
 	ts := hseq.New[T]()
-	if t, has := hseq.ForNameMaybe(ts, "PreSignedUrl"); has {
+	if t, has := hseq.ForNameMaybe(ts, attrPreSignedUrl); has {
 		c.s = optics.NewLens[T, string](t)
 	}
 
@@ -69,8 +69,8 @@ func isomorphism[T, S any]() optics.Isomorphism[T, S] {
 			iso = append(iso, codecTime(ts, sq, "LastModified"))
 		case "StorageClass":
 			iso = append(iso, codecStorageClass(ts, sq, "StorageClass"))
-		case "PreSignedUrl":
-		case "SystemMetadata":
+		case typePreSignedURL:
+		case typeSystemMetadata:
 		default:
 			iso = append(iso, codecMetadata(t, sq))
 		}
